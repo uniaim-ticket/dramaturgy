@@ -10,6 +10,7 @@ JSON, merge, validate, render).
 from __future__ import annotations
 
 import json
+import threading
 from pathlib import Path
 from typing import Any, Callable
 
@@ -227,6 +228,93 @@ class Api:
             return 400, {"error": f"missing input: {exc}. Run analyze first."}
         return self._start_job("area_card", prompt, {"area_id": area_id},
                                body.get("resume_session"))
+
+    # ---- one-shot full initialization ---------------------------------
+    def start_init_job(self, body: dict | None = None):
+        """Run the whole pipeline as a single job:
+
+        analyze -> Claude area tree -> Claude area card per area ->
+        merge -> validate -> render.
+
+        Mechanical steps run in-process; the two semantic steps invoke Claude
+        Code headlessly, sharing this job's progress log. The individual
+        buttons remain usable afterwards for adjustments.
+        """
+        body = body or {}
+        ok, info = claude_runner.preflight(self.claude_bin)
+        if not ok and not body.get("force"):
+            return 503, {"error": f"Claude Code CLI not available ({info}); "
+                                  "cannot run full initialization"}
+        job = self.jobs.create("init", "(pipeline)", {})
+        threading.Thread(
+            target=self._run_init, args=(job,), daemon=True).start()
+        return 202, {"job_id": job.id}
+
+    def _run_init(self, job) -> None:
+        from .jobs import Job  # local import to avoid cycle at module load
+        assert isinstance(job, Job)
+        cfg = self._config()
+        job.set_status("running")
+        try:
+            # 1. analyze (mechanical)
+            job.append_progress("[1/6] analyze repository")
+            res = self.analyze({})[1]
+            job.append_progress(
+                f"      files={res['files']} tables={res['tables']}")
+
+            # 2. area tree (Claude)
+            job.append_progress("[2/6] generate area tree with Claude")
+            prompt = area_tree_prompt(
+                self.repo_root, cfg.content_lang, cfg.project_name)
+            ok, err = claude_runner.stream_claude(
+                job, prompt, self.repo_root,
+                claude_bin=self.claude_bin, spawn=self.spawn)
+            if not ok:
+                return self._fail(job, f"area tree: {err}")
+            tree = self._read_optional("area-tree.json")
+            if not tree or not tree.get("areas"):
+                return self._fail(job, "area-tree.json missing or has no areas")
+
+            # 3. area cards (Claude, one invocation per area, resumed)
+            areas = tree.get("areas", [])
+            job.append_progress(f"[3/6] generate {len(areas)} area cards")
+            for i, area in enumerate(areas, 1):
+                area_id = area.get("id")
+                job.append_progress(f"      ({i}/{len(areas)}) {area_id}")
+                card_prompt = area_card_prompt(
+                    self.repo_root, cfg.content_lang, area_id)
+                ok, err = claude_runner.stream_claude(
+                    job, card_prompt, self.repo_root,
+                    claude_bin=self.claude_bin, spawn=self.spawn,
+                    resume_session=job.session_id)
+                if not ok:
+                    return self._fail(job, f"area card {area_id}: {err}")
+
+            # 4-6. merge / validate / render (mechanical)
+            job.append_progress("[4/6] merge area cards")
+            code, merged = self.merge({})
+            if code != 200:
+                return self._fail(job, f"merge: {merged.get('error')}")
+            job.append_progress(f"      merged areas={merged.get('areas')}")
+            job.append_progress("[5/6] validate")
+            code, v = self.validate()
+            if code != 200:
+                return self._fail(job, f"validate: {v.get('error')}")
+            job.append_progress(
+                f"      ok={v['ok']} errors={len(v['errors'])} "
+                f"warnings={len(v['warnings'])}")
+            job.append_progress("[6/6] render HTML")
+            self.render()
+            job.result_summary = (
+                f"initialized: {len(areas)} areas, validate ok={v['ok']}")
+            job.set_status("done")
+        except (FileNotFoundError, KeyError, ValueError) as exc:
+            self._fail(job, str(exc))
+
+    @staticmethod
+    def _fail(job, message: str) -> None:
+        job.append_progress(f"ERROR: {message}")
+        job.set_status("error", error=message)
 
     def get_job(self, job_id: str, since: int = 0):
         job = self.jobs.get(job_id)

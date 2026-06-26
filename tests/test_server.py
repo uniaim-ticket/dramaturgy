@@ -170,6 +170,58 @@ class ClaudeJobTests(unittest.TestCase):
             # Merge picks up the Claude-written card.
             self.assertEqual(api.merge()[1]["areas"], 1)
 
+    def test_init_pipeline_runs_end_to_end(self):
+        import re
+        with tempfile.TemporaryDirectory() as d:
+            _sample_repo(Path(d))
+            api = Api(d)
+            ws = api.ws
+
+            def pipeline_spawn(argv):
+                prompt = argv[argv.index("-p") + 1]
+                if "area-tree.json" in prompt:
+                    tree = {"content_lang": "ja", "system": {"name": "S"},
+                            "areas": [{"id": "sales", "name": "販売",
+                                       "source_hints": {"keywords": ["ticket"]},
+                                       "confidence": "high"}]}
+                    writes = [(ws / "area-tree.json",
+                               json.dumps(tree, ensure_ascii=False))]
+                else:
+                    path = re.search(r'([^\s`]+area-maps[^\s`]*\.json)', prompt).group(1)
+                    aid = Path(path).stem
+                    card = {"content_lang": "ja",
+                            "system": {"name": "S", "source_summary": {}},
+                            "actors": [], "concepts": [], "flows": [],
+                            "areas": [{"id": aid, "name": aid, "one_liner": "x",
+                                       "tables": [], "apis": [], "code_refs": [],
+                                       "related_area_ids": [], "child_area_ids": [],
+                                       "confidence": "high", "crud_summary": {}}]}
+                    writes = [(Path(path), json.dumps(card, ensure_ascii=False))]
+                lines = [
+                    json.dumps({"type": "system", "subtype": "init",
+                                "session_id": "s1"}),
+                    json.dumps({"type": "result", "is_error": False,
+                                "result": "ok", "session_id": "s1"}),
+                ]
+                return _FakeProc(lines, writes)
+
+            api.spawn = pipeline_spawn
+            # force=True so it runs even without a real claude binary present
+            status, res = api.start_init_job({"force": True})
+            self.assertEqual(status, 202)
+            job_id = res["job_id"]
+            for _ in range(300):
+                job = api.get_job(job_id)[1]
+                if job["status"] in ("done", "error", "aborted"):
+                    break
+                time.sleep(0.02)
+            self.assertEqual(job["status"], "done", job.get("error"))
+            self.assertTrue((ws / "area-tree.json").exists())
+            self.assertTrue((ws / "area-maps" / "sales.json").exists())
+            self.assertTrue((ws / "meaning-map.json").exists())
+            self.assertTrue((ws / "meaning-map.html").exists())
+            self.assertTrue(api.validate()[1]["ok"])
+
     def test_runner_reports_nonzero_exit(self):
         job = Job(id="j", kind="area_card", prompt="p")
 

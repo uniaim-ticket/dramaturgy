@@ -51,6 +51,7 @@ class Router:
         self._add("POST", "/api/render", "h_render")
         self._add("GET", "/api/view", "h_view_html")
         self._add("GET", "/api/preflight", "h_preflight")
+        self._add("POST", "/api/jobs/init", "h_job_init")
         self._add("POST", "/api/jobs/area-tree", "h_job_area_tree")
         self._add("POST", "/api/jobs/area-card", "h_job_area_card")
         self._add("GET", "/api/jobs/<job_id>", "h_get_job")
@@ -104,6 +105,9 @@ class Router:
 
     def h_preflight(self, params, body, query):
         return self.api.preflight()
+
+    def h_job_init(self, params, body, query):
+        return self.api.start_init_job(body or {})
 
     def h_job_area_tree(self, params, body, query):
         return self.api.start_area_tree_job(body or {})

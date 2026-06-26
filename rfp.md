@@ -198,6 +198,7 @@ child_area_ids:
 
 `dra serve` でローカルWebサーバ（`127.0.0.1` のみ）を起動し、ブラウザUIで意味地図を閲覧・編集する。requirements-reviewer (rr) と同じ考え方で、HTML/JSON成果物を中心に据える。
 
+* UIには**一括初期化**ボタンを設け、`analyze → ツリー生成(Claude) → 各領域カード生成(Claude) → merge → validate → render` を1つのジョブとして順に実行する。領域カード生成は `--resume` で同一セッションを引き継ぐ。完了後も各ステップの個別操作で調整できる。
 * 重い意味判断（領域ツリー生成・領域カード生成）は、UIのボタンから **Claude Code をヘッドレス起動**して実行する:
   `claude -p "<prompt>" --output-format stream-json --permission-mode acceptEdits --add-dir <repo>`
 * `acceptEdits` を既定にするのは、ヘッドレス実行では対話的な許可応答ができないため。Claude がワークスペース内のJSONを直接書き込めるようにする。

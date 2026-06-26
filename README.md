@@ -79,7 +79,12 @@ dra setup --repo-root /path/to/target      # choose ui_lang / content_lang / pro
 dra serve --repo-root /path/to/target      # opens http://127.0.0.1:5178/app/
 ```
 
-In the browser, step through:
+In the browser, the fastest path is **Initialize all with Claude** at the top:
+it runs the whole pipeline as one job — analyze → area tree → area cards →
+merge → validate → render — and reports progress live. When it finishes you
+stay in the same session and adjust any step individually.
+
+Or step through manually:
 
 1. **Analyze** — index the repo (mechanical, no Claude).
 2. **Area tree** — *Generate with Claude*: Claude writes `area-tree.json`.

@@ -101,8 +101,9 @@ def _summarize_event(event: dict) -> str | None:
     return None
 
 
-def run_job(
+def stream_claude(
     job: Job,
+    prompt: str,
     repo_root: str,
     *,
     claude_bin: str = "claude",
@@ -110,26 +111,24 @@ def run_job(
     resume_session: str | None = None,
     extra_args: Sequence[str] = (),
     spawn: SpawnFn = default_spawn,
-) -> None:
-    """Run one job to completion (blocking). Intended to run in a thread.
+) -> tuple[bool, str | None]:
+    """Run one headless Claude invocation, streaming progress into ``job``.
 
-    Updates the job's status/progress/session_id in place. stream-json lines
-    are parsed for progress; non-JSON lines are recorded verbatim so nothing
-    is silently dropped.
+    Appends progress and updates ``job.session_id``/``result_summary`` but does
+    NOT set a terminal job status — the caller decides, so several invocations
+    can share one job (used by the pipeline). Returns ``(ok, error)``.
     """
     argv = build_argv(
-        job.prompt, repo_root,
+        prompt, repo_root,
         claude_bin=claude_bin, permission_mode=permission_mode,
         resume_session=resume_session, extra_args=extra_args,
     )
-    job.set_status("running")
     job.append_progress(f"$ {claude_bin} -p … --permission-mode {permission_mode}")
 
     try:
         proc = spawn(argv)
     except OSError as exc:
-        job.set_status("error", error=f"failed to start claude: {exc}")
-        return
+        return False, f"failed to start claude: {exc}"
 
     saw_result = False
     for raw in proc.stdout:  # type: ignore[union-attr]
@@ -155,11 +154,38 @@ def run_job(
 
     code = proc.wait()
     if code != 0:
-        job.set_status("error", error=f"claude exited with code {code}")
-    elif not saw_result:
-        job.set_status("aborted", error="claude ended without a result event")
-    else:
+        return False, f"claude exited with code {code}"
+    if not saw_result:
+        return False, "claude ended without a result event"
+    return True, None
+
+
+def run_job(
+    job: Job,
+    repo_root: str,
+    *,
+    claude_bin: str = "claude",
+    permission_mode: str = "acceptEdits",
+    resume_session: str | None = None,
+    extra_args: Sequence[str] = (),
+    spawn: SpawnFn = default_spawn,
+) -> None:
+    """Run one single-invocation job to completion (blocking, for a thread).
+
+    Updates the job's status/progress/session_id in place. stream-json lines
+    are parsed for progress; non-JSON lines are recorded verbatim so nothing
+    is silently dropped.
+    """
+    job.set_status("running")
+    ok, error = stream_claude(
+        job, job.prompt, repo_root,
+        claude_bin=claude_bin, permission_mode=permission_mode,
+        resume_session=resume_session, extra_args=extra_args, spawn=spawn)
+    if ok:
         job.set_status("done")
+    else:
+        status = "aborted" if error and "without a result" in error else "error"
+        job.set_status(status, error=error)
 
 
 def start_job_thread(job: Job, repo_root: str, **kwargs) -> threading.Thread:

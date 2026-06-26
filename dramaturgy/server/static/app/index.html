@@ -28,6 +28,12 @@
 <main>
   <!-- left: work panel -->
   <section id="panel">
+    <div id="init-bar">
+      <button id="run-init" class="primary claude" data-i="init.run">Initialize all with Claude</button>
+      <p class="muted" data-i="init.help">Run the full pipeline once: analyze → area tree → area cards → merge → validate → render. Adjust individual steps below afterwards.</p>
+      <div id="init-job" class="job"></div>
+    </div>
+
     <div id="view-analyze" class="view">
       <h2 data-i="step.analyze">Analyze</h2>
       <p class="muted" data-i="analyze.help">Index the target repository (mechanical, no Claude).</p>

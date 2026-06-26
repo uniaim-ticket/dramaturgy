@@ -17,6 +17,8 @@ const I18N = {
     "job.running": "実行中…", "job.done": "完了", "job.error": "エラー",
     "card.generate": "Claudeで生成", "card.regenerate": "再生成", "card.done": "生成済み",
     "saved": "保存しました", "save_failed": "保存に失敗", "area.save": "この領域を保存",
+    "init.run": "Claudeで一括初期化", "init.help": "全工程を一度に実行します: 解析 → 領域ツリー → 領域カード → 統合 → 検査 → HTML生成。完了後、下の各ステップで個別に調整できます。",
+    "init.running": "一括初期化を実行中…", "init.done": "一括初期化が完了しました",
   },
   en: {
     "btn.save_config": "Save", "step.analyze": "1. Analyze", "step.tree": "2. Area tree",
@@ -31,6 +33,8 @@ const I18N = {
     "job.running": "running…", "job.done": "done", "job.error": "error",
     "card.generate": "Generate with Claude", "card.regenerate": "Regenerate", "card.done": "generated",
     "saved": "Saved", "save_failed": "Save failed", "area.save": "Save this area",
+    "init.run": "Initialize all with Claude", "init.help": "Run the full pipeline once: analyze → area tree → area cards → merge → validate → render. Adjust individual steps below afterwards.",
+    "init.running": "Initializing…", "init.done": "Initialization complete",
   },
 };
 
@@ -78,6 +82,26 @@ function showStep(step) {
   if (step === "tree") loadTreeJson();
   if (step === "cards") loadAreaList();
   if (step === "map") loadAreaEditor();
+}
+
+// ---- one-shot full initialization --------------------------------------
+async function runInit() {
+  const btn = document.getElementById("run-init");
+  btn.disabled = true;
+  const { status, data } = await api("POST", "/api/jobs/init", {});
+  if (status !== 202) {
+    showJob("init-job", { status: "error", error: data.error });
+    btn.disabled = false;
+    return;
+  }
+  pollJob(data.job_id, "init-job", async () => {
+    await refreshState();
+    // Reflect the freshly generated artifacts in whatever step is open.
+    const active = document.querySelector("nav#steps button.active");
+    showStep(active ? active.dataset.step : "map");
+    refreshView();
+    btn.disabled = false;
+  }, () => { btn.disabled = false; });
 }
 
 // ---- step 1: analyze ---------------------------------------------------
@@ -220,7 +244,7 @@ function showJob(elId, job) {
   el.innerHTML = head + lines;
 }
 
-async function pollJob(jobId, elId, onDone) {
+async function pollJob(jobId, elId, onDone, onEnd) {
   let since = 0;
   const acc = { progress: [] };
   const tick = async () => {
@@ -230,6 +254,7 @@ async function pollJob(jobId, elId, onDone) {
     showJob(elId, { ...data, progress: acc.progress });
     if (["done", "error", "aborted"].includes(data.status)) {
       if (data.status === "done" && onDone) onDone();
+      if (onEnd) onEnd(data.status);
       return;
     }
     setTimeout(tick, 1200);
@@ -262,6 +287,7 @@ async function saveConfig() {
 function init() {
   document.querySelectorAll("nav#steps button").forEach((b) =>
     (b.onclick = () => showStep(b.dataset.step)));
+  document.getElementById("run-init").onclick = runInit;
   document.getElementById("run-analyze").onclick = runAnalyze;
   document.getElementById("gen-tree").onclick = genTree;
   document.getElementById("save-tree").onclick = saveTreeJson;

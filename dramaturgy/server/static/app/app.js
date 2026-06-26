@@ -49,10 +49,22 @@ function applyI18n() {
 }
 
 // ---- tiny fetch helpers ------------------------------------------------
+// The client is served under ".../app/" (the URL ends with a slash). The API
+// lives one level up at ".../api/...". Derive both from the current location
+// so everything works behind a reverse proxy on an arbitrary sub-path — no
+// absolute "/app" / "/api" paths anywhere.
+const APP_BASE = location.pathname.replace(/[^/]*$/, "");   // ".../app/"
+const ROOT_BASE = APP_BASE.replace(/app\/$/, "");           // ".../"
+
+// Resolve an API path like "/api/state" relative to the server root.
+function apiUrl(path) {
+  return ROOT_BASE + path.replace(/^\//, "");
+}
+
 async function api(method, path, body) {
   const opts = { method, headers: { "Content-Type": "application/json" } };
   if (body !== undefined) opts.body = JSON.stringify(body);
-  const resp = await fetch(path, opts);
+  const resp = await fetch(apiUrl(path), opts);
   const text = await resp.text();
   let data;
   try { data = text ? JSON.parse(text) : null; } catch { data = text; }
@@ -269,7 +281,7 @@ function escapeHtml(s) {
 // ---- viewer ------------------------------------------------------------
 function refreshView() {
   const frame = document.getElementById("view-frame");
-  frame.src = "/api/view?_=" + Date.now();
+  frame.src = apiUrl("/api/view") + "?_=" + Date.now();
 }
 
 // ---- config ------------------------------------------------------------

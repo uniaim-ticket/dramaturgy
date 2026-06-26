@@ -193,7 +193,15 @@ def make_handler(api: Api):
             self.wfile.write(payload)
 
         def _serve_static(self, path: str):
-            rel = "app/index.html" if path in ("/", "/app", "/app/") else path.lstrip("/")
+            # The client uses relative asset/API paths, so it must be served
+            # from a URL ending in "app/". Redirect "/" and "/app" there with
+            # a RELATIVE Location, so it works behind a proxy sub-path.
+            if path in ("/", "/app"):
+                self.send_response(302)
+                self.send_header("Location", "app/")
+                self.end_headers()
+                return
+            rel = "app/index.html" if path == "/app/" else path.lstrip("/")
             target = (STATIC_DIR / rel).resolve()
             if not str(target).startswith(str(STATIC_DIR.resolve())) or not target.is_file():
                 return self._send_raw(404, "not found", "text/plain; charset=utf-8")

@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>dramaturgy</title>
+<link rel="stylesheet" href="/app/app.css">
+</head>
+<body>
+<header>
+  <h1>dramaturgy</h1>
+  <div class="sub" id="repo-info"></div>
+  <div class="spacer"></div>
+  <div class="langs">
+    <label>ui <select id="ui-lang"><option>ja</option><option>en</option></select></label>
+    <label>content <select id="content-lang"><option>ja</option><option>en</option></select></label>
+    <button id="save-config" data-i="btn.save_config">Save</button>
+  </div>
+</header>
+
+<nav id="steps">
+  <button data-step="analyze" data-i="step.analyze">1. Analyze</button>
+  <button data-step="tree"    data-i="step.tree">2. Area tree</button>
+  <button data-step="cards"   data-i="step.cards">3. Area cards</button>
+  <button data-step="map"     data-i="step.map">4. Map &amp; view</button>
+</nav>
+
+<main>
+  <!-- left: work panel -->
+  <section id="panel">
+    <div id="view-analyze" class="view">
+      <h2 data-i="step.analyze">Analyze</h2>
+      <p class="muted" data-i="analyze.help">Index the target repository (mechanical, no Claude).</p>
+      <button id="run-analyze" class="primary" data-i="analyze.run">Run analyze</button>
+      <pre id="analyze-out" class="out"></pre>
+    </div>
+
+    <div id="view-tree" class="view" hidden>
+      <h2 data-i="step.tree">Area tree</h2>
+      <p class="muted" data-i="tree.help">Have Claude Code generate area-tree.json from the analysis. It writes the file directly.</p>
+      <button id="gen-tree" class="primary claude" data-i="tree.generate">Generate with Claude</button>
+      <div id="tree-job" class="job"></div>
+      <h3 data-i="tree.editor">area-tree.json</h3>
+      <textarea id="tree-json" class="json-edit" spellcheck="false"></textarea>
+      <div class="row">
+        <button id="save-tree" data-i="btn.save_json">Save JSON</button>
+        <span id="tree-status" class="status"></span>
+      </div>
+    </div>
+
+    <div id="view-cards" class="view" hidden>
+      <h2 data-i="step.cards">Area cards</h2>
+      <p class="muted" data-i="cards.help">For each area in the tree, have Claude write its meaning-map card.</p>
+      <ul id="area-list"></ul>
+    </div>
+
+    <div id="view-map" class="view" hidden>
+      <h2 data-i="step.map">Map &amp; view</h2>
+      <div class="row">
+        <button id="run-merge" data-i="map.merge">Merge cards</button>
+        <button id="run-validate" data-i="map.validate">Validate</button>
+        <button id="run-render" data-i="map.render">Render HTML</button>
+      </div>
+      <pre id="map-out" class="out"></pre>
+      <h3 data-i="map.edit_area">Edit area (writes back to meaning-map.json)</h3>
+      <div id="area-editor"></div>
+    </div>
+  </section>
+
+  <!-- right: live HTML view -->
+  <section id="viewer">
+    <div class="viewer-bar">
+      <span data-i="viewer.title">Meaning map preview</span>
+      <button id="refresh-view" data-i="viewer.refresh">Refresh</button>
+    </div>
+    <iframe id="view-frame" src="about:blank"></iframe>
+  </section>
+</main>
+
+<script src="/app/app.js"></script>
+</body>
+</html>

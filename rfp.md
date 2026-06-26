@@ -190,6 +190,38 @@ child_area_ids:
   - ticket_sales.admission
 ```
 
+## 実行モデル（重要）
+
+このツールはユーザーが個別のPythonスクリプトを手で叩く方式ではない。実行主体は次の2つで、どちらも**意味判断は Claude Code が行い、機械処理はスクリプトが行う**。
+
+### 方式A: ローカルWeb UI（既定）
+
+`dra serve` でローカルWebサーバ（`127.0.0.1` のみ）を起動し、ブラウザUIで意味地図を閲覧・編集する。requirements-reviewer (rr) と同じ考え方で、HTML/JSON成果物を中心に据える。
+
+* 重い意味判断（領域ツリー生成・領域カード生成）は、UIのボタンから **Claude Code をヘッドレス起動**して実行する:
+  `claude -p "<prompt>" --output-format stream-json --permission-mode acceptEdits --add-dir <repo>`
+* `acceptEdits` を既定にするのは、ヘッドレス実行では対話的な許可応答ができないため。Claude がワークスペース内のJSONを直接書き込めるようにする。
+* 進捗は stream-json をパースし、UIは**ポーリング**で表示する（バッファリングするプロキシでも止まらないため）。
+* セッションIDを保持し、追撃の指示は `--resume` で文脈を引き継ぐ。
+
+### 方式B: Claude Code のカスタムコマンド
+
+解析対象リポジトリ上の Claude Code セッションで、同梱のカスタムコマンドを使う。
+
+```text
+/dramaturgy:analyze    リポジトリ索引（dra analyze-* + candidates）
+/dramaturgy:tree       Claude が area-tree.json を作成
+/dramaturgy:cards [id] Claude が area-maps/<id>.json を作成
+/dramaturgy:finalize   merge + validate + render
+```
+
+### 書き戻し（双方向）
+
+* 正本は `area-tree.json` / `meaning-map.json`。HTMLは生成ビュー。
+* Claude Code は意味判断の結果を正本JSONへ直接書き込む。
+* Web UI 上の人間の編集（領域名・一言説明・注意点など）は、API経由で正本JSONへ**書き戻す**（`PUT /api/artifact/<name>`、`PATCH /api/area/<id>`）。生JSON編集と構造化フィールド編集の両方を許す。
+* どちらの経路で編集しても、HTMLは正本JSONから再描画される。
+
 ## Claude Code 内での使い方
 
 Claude Code は以下のように進める。
@@ -705,8 +737,11 @@ HTMLに必要なビュー:
 ## 重要な運用ルール
 
 * 正本は meaning-map.json と area-tree.json
-* HTMLは生成物
-* CLIは材料集めと機械検査を担当する
+* HTMLは生成物（ビュー）であり、Web UI上の編集は正本JSONへ書き戻す
+* 実行はユーザーが手でスクリプトを叩くのではなく、Web UI または Claude Code のカスタムコマンドから行う
+* Web UIは Claude Code をヘッドレス起動して意味判断を実行させ、結果を正本JSONへ書かせる
+* サーバは 127.0.0.1 のみにバインドする（ローカル単一利用者向け）
+* スクリプト（CLI）は材料集めと機械検査を担当する
 * Claudeは意味判断を担当する
 * 領域分割は必ずClaudeが一度レビューする
 * 分量超過は「自動分割」ではなく「自然な下位領域案」として扱う

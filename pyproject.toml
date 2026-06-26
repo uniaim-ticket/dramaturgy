@@ -23,9 +23,15 @@ dramaturgy = "dramaturgy.cli:main"
 dra = "dramaturgy.cli:main"
 
 [tool.setuptools]
-packages = ["dramaturgy", "dramaturgy.common", "dramaturgy.commands"]
+packages = [
+    "dramaturgy",
+    "dramaturgy.common",
+    "dramaturgy.commands",
+    "dramaturgy.server",
+]
 
 [tool.setuptools.package-data]
-# Ship the message catalogs and prompt templates with the package so the
-# CLI works once installed, not just from a source checkout.
+# Ship the message catalogs, prompt templates, and the browser client so the
+# CLI and web UI work once installed, not just from a source checkout.
 dramaturgy = ["catalogs/cli/*.json", "catalogs/html/*.json", "prompts/*.md"]
+"dramaturgy.server" = ["static/app/*"]

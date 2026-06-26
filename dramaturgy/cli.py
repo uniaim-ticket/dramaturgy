@@ -18,8 +18,14 @@ import sys
 from . import __version__
 
 # subcommand name -> (module under dramaturgy.commands, one-line help)
+# Primary flow is: setup -> serve (the web UI drives everything else and
+# invokes Claude Code). The remaining commands are the mechanical steps the
+# UI calls internally, exposed for scripting / Claude-Code custom commands.
 COMMANDS: dict[str, tuple[str, str]] = {
+    # primary
     "setup":       ("setup_cmd", "initialize .dramaturgy/config.json (languages + project)"),
+    "serve":       ("serve", "start the web UI; edit the map and drive Claude Code"),
+    # mechanical (also used by the server and by scripts/Claude Code)
     "analyze-repo": ("analyze_repo", "index source files, roles, routes, table hints"),
     "analyze-schema": ("analyze_schema", "parse SQL DDL into tables / FKs / status columns"),
     "candidates":  ("propose_area_candidates", "assemble area-grouping material for Claude"),
@@ -31,13 +37,20 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "render":      ("render_html", "render meaning-map.json to a self-contained HTML"),
 }
 
+PRIMARY = ("setup", "serve")
+
 
 def _print_help() -> None:
     print("dramaturgy (dra) — generate a meaning map of a large system\n")
     print("usage: dra <command> [options]\n")
-    print("commands:")
     width = max(len(name) for name in COMMANDS)
+    print("primary:")
+    for name in PRIMARY:
+        print(f"  {name:<{width}}  {COMMANDS[name][1]}")
+    print("\nmechanical steps (the web UI runs these for you; also scriptable):")
     for name, (_, help_text) in COMMANDS.items():
+        if name in PRIMARY:
+            continue
         print(f"  {name:<{width}}  {help_text}")
     print("\nrun 'dra <command> --help' for command-specific options.")
 

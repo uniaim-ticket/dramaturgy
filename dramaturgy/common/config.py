@@ -1,4 +1,4 @@
-"""Read/write ``.meaning-map/config.json`` and resolve language settings.
+"""Read/write ``.dramaturgy/config.json`` and resolve language settings.
 
 The config is the source of truth for ``ui_lang`` / ``content_lang`` and
 project metadata. Every CLI accepts ``--ui-lang`` / ``--content-lang`` to

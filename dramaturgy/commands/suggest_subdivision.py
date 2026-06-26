@@ -14,15 +14,12 @@ import argparse
 from collections import defaultdict
 from pathlib import PurePosixPath
 
-from common.bootstrap import setup_path
 
-setup_path()
-
-from common.area_match import (  # noqa: E402
+from ..common.area_match import (  # noqa: E402
     estimate_tokens, find_area, match_files, match_tables,
 )
-from common.config import add_lang_args, resolve  # noqa: E402
-from common.paths import read_json, write_json, workspace_dir  # noqa: E402
+from ..common.config import add_lang_args, resolve  # noqa: E402
+from ..common.paths import read_json, write_json, workspace_dir  # noqa: E402
 
 
 def _cluster_files_by_dir(files: list[dict]) -> list[dict]:
@@ -142,7 +139,3 @@ def main(argv: list[str] | None = None) -> int:
     write_json(out, result)
     print(rs.ui.t("common.wrote", path=out))
     return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())

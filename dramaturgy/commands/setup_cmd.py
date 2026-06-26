@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""setup.py — initialize ``.meaning-map/config.json``.
+"""setup.py — initialize ``.dramaturgy/config.json``.
 
 Sets ``ui_lang`` (CLI/HTML chrome language) and ``content_lang`` (language
 of the generated meaning map) plus project metadata. Both languages are
@@ -21,13 +21,10 @@ from __future__ import annotations
 import argparse
 import sys
 
-from common.bootstrap import setup_path
 
-setup_path()
-
-from common import DEFAULT_LANG, SUPPORTED_LANGS  # noqa: E402
-from common.config import Config, load_config, save_config  # noqa: E402
-from common.i18n import Catalog  # noqa: E402
+from ..common import DEFAULT_LANG, SUPPORTED_LANGS  # noqa: E402
+from ..common.config import Config, load_config, save_config  # noqa: E402
+from ..common.i18n import Catalog  # noqa: E402
 
 
 def _prompt(cat: Catalog, key: str, default: str, no_input: bool, **fmt) -> str:
@@ -104,7 +101,3 @@ def main(argv: list[str] | None = None) -> int:
     print(cat.t("setup.summary",
                 ui_lang=ui_lang, content_lang=content_lang, name=project_name))
     return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())

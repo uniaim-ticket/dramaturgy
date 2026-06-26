@@ -19,13 +19,10 @@ import argparse
 import html
 from pathlib import Path
 
-from common.bootstrap import setup_path
 
-setup_path()
-
-from common.config import add_lang_args, resolve  # noqa: E402
-from common.i18n import Catalog  # noqa: E402
-from common.paths import read_json, workspace_dir  # noqa: E402
+from ..common.config import add_lang_args, resolve  # noqa: E402
+from ..common.i18n import Catalog  # noqa: E402
+from ..common.paths import read_json, workspace_dir  # noqa: E402
 
 CSS = """
 * { box-sizing: border-box; }
@@ -251,7 +248,3 @@ def main(argv: list[str] | None = None) -> int:
     out_path.write_text(render_html(mm, rs.ui_lang), encoding="utf-8")
     print(rs.ui.t("render.done", path=str(out_path)))
     return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())

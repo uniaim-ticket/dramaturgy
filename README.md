@@ -26,49 +26,59 @@ prompt templates; no code change.
 
 Python 3.10+ (standard library only — no external dependencies).
 
+## Install
+
+```bash
+pip install -e .        # exposes the `dra` (and `dramaturgy`) command
+```
+
+Both `dra` and the full name `dramaturgy` resolve to the same CLI; `dra` is
+the short alias. Without installing you can also run `python -m dramaturgy`.
+
 ## Quick start
 
 ```bash
-# 0. Set ui_lang / content_lang / project, writing .meaning-map/config.json
-python tools/meaning_map/setup.py --ui-lang en --content-lang en \
+# 0. Set ui_lang / content_lang / project, writing .dramaturgy/config.json
+dra setup --ui-lang en --content-lang en \
   --project-name "My System" --repo-root /path/to/target
 
 # 1-3. Gather material
-python tools/meaning_map/analyze_repo.py            --repo-root /path/to/target
-python tools/meaning_map/analyze_schema.py --schema /path/to/target/db/schema.sql
-python tools/meaning_map/propose_area_candidates.py --repo-root /path/to/target
+dra analyze-repo   --repo-root /path/to/target
+dra analyze-schema --schema /path/to/target/db/schema.sql --repo-root /path/to/target
+dra candidates     --repo-root /path/to/target
 
 # 4. Build the prompt for Claude, then have Claude write area-tree.json
-python tools/meaning_map/build_area_tree_prompt.py  --repo-root /path/to/target
-#    -> .meaning-map/prompts/area-tree.md   (run it in Claude; save area-tree.json)
+dra tree-prompt    --repo-root /path/to/target
+#    -> .dramaturgy/prompts/area-tree.md   (run it in Claude; save area-tree.json)
 
 # 5. Per area: build a pack, have Claude write the area map JSON
-python tools/meaning_map/build_area_pack.py --area-id sales --repo-root /path/to/target
-python tools/meaning_map/suggest_subdivision.py --area-id sales --repo-root /path/to/target  # if too large
+dra pack      --area-id sales --repo-root /path/to/target
+dra subdivide --area-id sales --repo-root /path/to/target   # if too large
 
 # 6-8. Merge, validate, render
-python tools/meaning_map/merge_maps.py .meaning-map/area-maps/*.json --repo-root /path/to/target
-python tools/meaning_map/validate_map.py --repo-root /path/to/target
-python tools/meaning_map/render_html.py  --repo-root /path/to/target
+dra merge    .dramaturgy/area-maps/*.json --repo-root /path/to/target
+dra validate --repo-root /path/to/target
+dra render   --repo-root /path/to/target
 ```
 
-Every CLI accepts `--ui-lang`, `--content-lang` (generators only) and
-`--repo-root` to override `config.json` per invocation.
+Every command accepts `--ui-lang`, `--content-lang` (generators only) and
+`--repo-root` to override `config.json` per invocation. Run `dra --help` for
+the command list and `dra <command> --help` for command options.
 
-## Tools
+## Commands
 
-| Tool | Role |
+| Command | Role |
 | --- | --- |
-| `setup.py` | Write `.meaning-map/config.json` (languages + project) |
-| `analyze_repo.py` | Index source files, roles, routes, table hints |
-| `analyze_schema.py` | Parse SQL DDL into tables / FKs / status columns |
-| `propose_area_candidates.py` | Grouping material (dirs, FK graph, API prefixes) |
-| `build_area_tree_prompt.py` | Render the `content_lang` area-tree prompt |
-| `build_area_pack.py` | Gather one area's files/tables/APIs; warn if too large |
-| `suggest_subdivision.py` | Propose natural sub-areas (never auto-splits) |
-| `merge_maps.py` | Merge per-area maps; detect dup ids / drift / orphans |
-| `validate_map.py` | Mechanical consistency + language invariants |
-| `render_html.py` | Render `meaning-map.json` to a self-contained HTML |
+| `dra setup` | Write `.dramaturgy/config.json` (languages + project) |
+| `dra analyze-repo` | Index source files, roles, routes, table hints |
+| `dra analyze-schema` | Parse SQL DDL into tables / FKs / status columns |
+| `dra candidates` | Grouping material (dirs, FK graph, API prefixes) |
+| `dra tree-prompt` | Render the `content_lang` area-tree prompt |
+| `dra pack` | Gather one area's files/tables/APIs; warn if too large |
+| `dra subdivide` | Propose natural sub-areas (never auto-splits) |
+| `dra merge` | Merge per-area maps; detect dup ids / drift / orphans |
+| `dra validate` | Mechanical consistency + language invariants |
+| `dra render` | Render `meaning-map.json` to a self-contained HTML |
 
 ## Principles
 

@@ -1,6 +1,6 @@
-"""Canonical paths and JSON I/O helpers for the meaning-map workspace.
+"""Canonical paths and JSON I/O helpers for the dramaturgy workspace.
 
-All intermediate artifacts live under ``.meaning-map/`` at the repo root.
+All intermediate artifacts live under ``.dramaturgy/`` at the repo root.
 JSON is always written pretty-printed and with ``ensure_ascii=False`` so
 that Japanese (and other non-ASCII) content stays readable and diffs are
 reviewable in Git.
@@ -12,7 +12,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-WORKSPACE_DIRNAME = ".meaning-map"
+WORKSPACE_DIRNAME = ".dramaturgy"
 
 
 def workspace_dir(repo_root: str | Path = ".") -> Path:

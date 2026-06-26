@@ -4,7 +4,7 @@
 Reads source-index / schema-index / area-candidates, builds compact
 summaries (so the prompt stays readable rather than dumping every file),
 and fills the language-specific ``area_tree`` template chosen by
-``content_lang``. Writes ``.meaning-map/prompts/area-tree.md``.
+``content_lang``. Writes ``.dramaturgy/prompts/area-tree.md``.
 
 The prompt instructions are in ``content_lang`` and ask Claude to write the
 generated fields in that same language and to stamp ``content_lang`` into
@@ -16,13 +16,10 @@ from __future__ import annotations
 import argparse
 import json
 
-from common.bootstrap import setup_path
 
-setup_path()
-
-from common.config import add_lang_args, resolve  # noqa: E402
-from common.paths import read_json, workspace_dir  # noqa: E402
-from common.prompts import render_prompt  # noqa: E402
+from ..common.config import add_lang_args, resolve  # noqa: E402
+from ..common.paths import read_json, workspace_dir  # noqa: E402
+from ..common.prompts import render_prompt  # noqa: E402
 
 
 def _summarize_source(idx: dict) -> str:
@@ -106,7 +103,3 @@ def main(argv: list[str] | None = None) -> int:
     out_path.write_text(prompt, encoding="utf-8")
     print(rs.ui.t("common.wrote", path=str(out_path)))
     return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())

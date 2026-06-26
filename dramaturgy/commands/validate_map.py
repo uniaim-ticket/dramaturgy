@@ -16,14 +16,11 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from common.bootstrap import setup_path
 
-setup_path()
-
-from common import SUPPORTED_LANGS  # noqa: E402
-from common.config import add_lang_args, resolve  # noqa: E402
-from common.i18n import validate_catalogs  # noqa: E402
-from common.paths import read_json, workspace_dir  # noqa: E402
+from ..common import SUPPORTED_LANGS  # noqa: E402
+from ..common.config import add_lang_args, resolve  # noqa: E402
+from ..common.i18n import validate_catalogs  # noqa: E402
+from ..common.paths import read_json, workspace_dir  # noqa: E402
 
 
 class Report:
@@ -181,7 +178,3 @@ def main(argv: list[str] | None = None) -> int:
     print(rs.ui.t("validate.ok",
                   errors=0, warnings=len(report.warnings)))
     return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())

@@ -5,7 +5,7 @@ Combines source-index.json and schema-index.json into grouping material
 that helps Claude form a natural area tree. This output is NOT a final
 decision — it is supporting evidence only (see rfp.md).
 
-Produces ``.meaning-map/area-candidates.json`` with:
+Produces ``.dramaturgy/area-candidates.json`` with:
 - directory groupings (path depth-1/2 buckets with size)
 - table relationship graph (FK edges)
 - API-prefix groupings
@@ -21,12 +21,9 @@ import argparse
 from collections import defaultdict
 from pathlib import PurePosixPath
 
-from common.bootstrap import setup_path
 
-setup_path()
-
-from common.config import add_lang_args, resolve  # noqa: E402
-from common.paths import read_json, write_json, workspace_dir  # noqa: E402
+from ..common.config import add_lang_args, resolve  # noqa: E402
+from ..common.paths import read_json, write_json, workspace_dir  # noqa: E402
 
 
 def _dir_groups(files: list[dict]) -> list[dict]:
@@ -125,7 +122,3 @@ def main(argv: list[str] | None = None) -> int:
     print(rs.ui.t("candidates.done"))
     print(rs.ui.t("common.wrote", path=out))
     return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())

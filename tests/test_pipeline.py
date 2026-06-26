@@ -1,8 +1,10 @@
-"""End-to-end and unit tests for the meaning-map toolchain.
+"""End-to-end and unit tests for the dramaturgy toolchain.
 
-Run with: ``python -m pytest tests/`` or ``python tests/test_pipeline.py``.
+Run with: ``python -m pytest tests/`` or
+``python -m unittest discover -s tests`` from the repo root.
 Uses only the standard library (unittest) so it runs without extra deps.
-Each test drives the CLIs against a temporary workspace.
+Each test drives the CLI through the ``dra`` dispatcher against a temporary
+workspace, so it also exercises subcommand routing.
 """
 
 from __future__ import annotations
@@ -13,22 +15,19 @@ import tempfile
 import unittest
 from pathlib import Path
 
+# Make the repo-root package importable when running from a source checkout.
 ROOT = Path(__file__).resolve().parent.parent
-PKG = ROOT / "tools" / "meaning_map"
-sys.path.insert(0, str(PKG))
+sys.path.insert(0, str(ROOT))
 
-from common.config import Config, load_config, save_config  # noqa: E402
-from common.i18n import Catalog, validate_catalogs  # noqa: E402
-from common.prompts import load_prompt  # noqa: E402
-import analyze_repo  # noqa: E402
-import analyze_schema  # noqa: E402
-import build_area_pack  # noqa: E402
-import merge_maps  # noqa: E402
-import render_html  # noqa: E402
-import setup as setup_tool  # noqa: E402
-import validate_map  # noqa: E402
+from dramaturgy.cli import COMMANDS, main as dra  # noqa: E402
+from dramaturgy.common.config import (  # noqa: E402
+    Config, load_config, save_config,
+)
+from dramaturgy.common.i18n import Catalog, validate_catalogs  # noqa: E402
+from dramaturgy.common.prompts import load_prompt  # noqa: E402
 
 SUPPORTED = ("ja", "en")
+WORKSPACE = ".dramaturgy"
 
 
 def _make_sample_repo(root: Path) -> None:
@@ -81,18 +80,35 @@ class ConfigTests(unittest.TestCase):
             Config(ui_lang="xx").validate()
 
 
+class DispatcherTests(unittest.TestCase):
+    def test_help_and_version(self):
+        self.assertEqual(0, dra(["--help"]))
+        self.assertEqual(0, dra(["--version"]))
+
+    def test_unknown_command(self):
+        self.assertEqual(2, dra(["definitely-not-a-command"]))
+
+    def test_all_commands_importable(self):
+        import importlib
+        for _, (module_name, _help) in COMMANDS.items():
+            mod = importlib.import_module(
+                f"dramaturgy.commands.{module_name}")
+            self.assertTrue(hasattr(mod, "main"))
+
+
 class PipelineTests(unittest.TestCase):
     def test_full_pipeline(self):
         with tempfile.TemporaryDirectory() as d:
             root = Path(d)
             _make_sample_repo(root)
-            ws = root / ".meaning-map"
+            ws = root / WORKSPACE
 
-            self.assertEqual(0, setup_tool.main([
-                "--no-input", "--ui-lang", "ja", "--content-lang", "ja",
-                "--project-name", "Sample", "--repo-root", d]))
-            self.assertEqual(0, analyze_repo.main(["--repo-root", d]))
-            self.assertEqual(0, analyze_schema.main(["--repo-root", d]))
+            self.assertEqual(0, dra([
+                "setup", "--no-input", "--ui-lang", "ja",
+                "--content-lang", "ja", "--project-name", "Sample",
+                "--repo-root", d]))
+            self.assertEqual(0, dra(["analyze-repo", "--repo-root", d]))
+            self.assertEqual(0, dra(["analyze-schema", "--repo-root", d]))
 
             schema = json.loads((ws / "schema-index.json").read_text())
             names = {t["name"] for t in schema["tables"]}
@@ -109,8 +125,8 @@ class PipelineTests(unittest.TestCase):
                     "confidence": "high",
                 }],
             }, ensure_ascii=False), encoding="utf-8")
-            self.assertEqual(0, build_area_pack.main([
-                "--repo-root", d, "--area-id", "sales"]))
+            self.assertEqual(0, dra([
+                "pack", "--repo-root", d, "--area-id", "sales"]))
 
             area_map = {
                 "content_lang": "ja",
@@ -144,9 +160,9 @@ class PipelineTests(unittest.TestCase):
             amap.write_text(json.dumps(area_map, ensure_ascii=False),
                             encoding="utf-8")
 
-            self.assertEqual(0, merge_maps.main(["--repo-root", d, str(amap)]))
-            self.assertEqual(0, validate_map.main(["--repo-root", d]))
-            self.assertEqual(0, render_html.main(["--repo-root", d]))
+            self.assertEqual(0, dra(["merge", "--repo-root", d, str(amap)]))
+            self.assertEqual(0, dra(["validate", "--repo-root", d]))
+            self.assertEqual(0, dra(["render", "--repo-root", d]))
             html = (ws / "meaning-map.html").read_text()
             self.assertIn("販売", html)
             self.assertIn('lang="ja"', html)
@@ -155,11 +171,11 @@ class PipelineTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             root = Path(d)
             _make_sample_repo(root)
-            ws = root / ".meaning-map"
-            setup_tool.main(["--no-input", "--repo-root", d,
-                             "--content-lang", "ja"])
-            analyze_repo.main(["--repo-root", d])
-            analyze_schema.main(["--repo-root", d])
+            ws = root / WORKSPACE
+            dra(["setup", "--no-input", "--repo-root", d,
+                 "--content-lang", "ja"])
+            dra(["analyze-repo", "--repo-root", d])
+            dra(["analyze-schema", "--repo-root", d])
             mm = {
                 "content_lang": "ja",
                 "system": {"name": "S", "summary": "",
@@ -173,12 +189,12 @@ class PipelineTests(unittest.TestCase):
             (ws / "meaning-map.json").write_text(
                 json.dumps(mm, ensure_ascii=False), encoding="utf-8")
             # Non-zero exit because 'ghost' is not a known table.
-            self.assertEqual(1, validate_map.main(["--repo-root", d]))
+            self.assertEqual(1, dra(["validate", "--repo-root", d]))
 
     def test_mixed_language_html(self):
         with tempfile.TemporaryDirectory() as d:
             root = Path(d)
-            ws = root / ".meaning-map"
+            ws = root / WORKSPACE
             ws.mkdir(parents=True)
             save_config(Config(ui_lang="en", content_lang="ja", repo_root=d), d)
             (ws / "meaning-map.json").write_text(json.dumps({
@@ -187,7 +203,7 @@ class PipelineTests(unittest.TestCase):
                            "source_summary": {}},
                 "actors": [], "concepts": [], "flows": [], "areas": [],
             }, ensure_ascii=False), encoding="utf-8")
-            self.assertEqual(0, render_html.main(["--repo-root", d]))
+            self.assertEqual(0, dra(["render", "--repo-root", d]))
             html = (ws / "meaning-map.html").read_text()
             # English chrome, content language note present, lang=ja.
             self.assertIn("Overview", html)

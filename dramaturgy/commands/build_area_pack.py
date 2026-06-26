@@ -8,10 +8,10 @@ pack exceeds the limit. Output is a Markdown pack written for Claude.
 
     python tools/meaning_map/build_area_pack.py \
       --area-id ticket_sales.application \
-      --area-tree .meaning-map/area-tree.json \
-      --source-index .meaning-map/source-index.json \
-      --schema-index .meaning-map/schema-index.json \
-      --out .meaning-map/area-packs/ticket_sales.application.md
+      --area-tree .dramaturgy/area-tree.json \
+      --source-index .dramaturgy/source-index.json \
+      --schema-index .dramaturgy/schema-index.json \
+      --out .dramaturgy/area-packs/ticket_sales.application.md
 """
 
 from __future__ import annotations
@@ -20,15 +20,12 @@ import argparse
 import json
 from pathlib import Path
 
-from common.bootstrap import setup_path
 
-setup_path()
-
-from common.area_match import (  # noqa: E402
+from ..common.area_match import (  # noqa: E402
     estimate_tokens, find_area, match_apis, match_files, match_tables,
 )
-from common.config import add_lang_args, resolve  # noqa: E402
-from common.paths import read_json, workspace_dir  # noqa: E402
+from ..common.config import add_lang_args, resolve  # noqa: E402
+from ..common.paths import read_json, workspace_dir  # noqa: E402
 
 DEFAULT_TOKEN_LIMIT = 100_000
 
@@ -104,7 +101,3 @@ def main(argv: list[str] | None = None) -> int:
     out_path.write_text(render_markdown(pack), encoding="utf-8")
     print(rs.ui.t("common.wrote", path=str(out_path)))
     return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())

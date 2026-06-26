@@ -2,7 +2,7 @@
 """analyze_schema.py — extract conceptual candidates from a DB schema.
 
 Parses ``CREATE TABLE`` statements from one or more SQL/DDL files and emits
-``.meaning-map/schema-index.json``: tables, columns, foreign keys, enum/
+``.dramaturgy/schema-index.json``: tables, columns, foreign keys, enum/
 status-like columns, plus heuristic flags (history / junction / master /
 aggregate table candidates).
 
@@ -17,12 +17,9 @@ import argparse
 import re
 from pathlib import Path
 
-from common.bootstrap import setup_path
 
-setup_path()
-
-from common.config import add_lang_args, resolve  # noqa: E402
-from common.paths import write_json, workspace_dir  # noqa: E402
+from ..common.config import add_lang_args, resolve  # noqa: E402
+from ..common.paths import write_json, workspace_dir  # noqa: E402
 
 CREATE_RE = re.compile(
     r"CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?[`\"\[]?(\w+)[`\"\]]?\s*\((.*?)\)\s*"
@@ -113,7 +110,7 @@ def main(argv: list[str] | None = None) -> int:
         sql_files = [Path(p) for p in args.schema]
     else:
         sql_files = [p for p in Path(repo_root).rglob("*.sql")
-                     if ".meaning-map" not in p.parts]
+                     if ".dramaturgy" not in p.parts]
     if not sql_files:
         print(rs.ui.t("analyze_schema.no_input"))
         return 1
@@ -132,7 +129,3 @@ def main(argv: list[str] | None = None) -> int:
     print(rs.ui.t("analyze_schema.counted", tables=len(tables)))
     print(rs.ui.t("common.wrote", path=out))
     return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())

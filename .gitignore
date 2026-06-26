@@ -1,7 +1,12 @@
-# Generated meaning-map workspace (intermediate artifacts + HTML output).
+# Generated dramaturgy workspace (intermediate artifacts + HTML output).
 # The canonical sources are the per-project area-tree.json / meaning-map.json,
 # which a user commits inside their own target repo, not here.
-.meaning-map/
+.dramaturgy/
+
+# Packaging
+*.egg-info/
+build/
+dist/
 
 # Python
 __pycache__/

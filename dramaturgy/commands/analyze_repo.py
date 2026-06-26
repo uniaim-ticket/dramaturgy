@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """analyze_repo.py — build a source-code index.
 
-Walks the repository and produces ``.meaning-map/source-index.json`` with
+Walks the repository and produces ``.dramaturgy/source-index.json`` with
 per-file metadata plus heuristic candidates (routes, controllers, models,
 migrations, views, jobs, table-name strings). The heuristics are
 language-agnostic regexes; Claude does the meaning judgment downstream, so
@@ -17,17 +17,14 @@ import argparse
 import re
 from pathlib import Path
 
-from common.bootstrap import setup_path
 
-setup_path()
-
-from common.config import add_lang_args, resolve  # noqa: E402
-from common.paths import write_json, workspace_dir  # noqa: E402
+from ..common.config import add_lang_args, resolve  # noqa: E402
+from ..common.paths import write_json, workspace_dir  # noqa: E402
 
 # Directories that never carry domain meaning.
 SKIP_DIRS = {
     ".git", ".hg", ".svn", "node_modules", "vendor", "dist", "build",
-    "__pycache__", ".meaning-map", ".venv", "venv", ".idea", ".vscode",
+    "__pycache__", ".dramaturgy", ".venv", "venv", ".idea", ".vscode",
     "target", ".next", ".cache", "coverage", ".pytest_cache",
 }
 CODE_EXTS = {
@@ -160,7 +157,3 @@ def main(argv: list[str] | None = None) -> int:
                   lines=index["summary"]["lines"]))
     print(rs.ui.t("common.wrote", path=out))
     return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())

@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dramaturgy"
+version = "0.1.0"
+description = "Generate a compact, human-readable meaning map of a large system, driven from Claude Code. Bilingual (ja/en) by design."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "sasanquaneuf" }]
+keywords = ["meaning-map", "documentation", "claude-code", "code-analysis"]
+
+# Standard library only — no runtime dependencies.
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/sasanquaneuf/dramaturgy"
+
+[project.scripts]
+dramaturgy = "dramaturgy.cli:main"
+dra = "dramaturgy.cli:main"
+
+[tool.setuptools]
+packages = ["dramaturgy", "dramaturgy.common", "dramaturgy.commands"]
+
+[tool.setuptools.package-data]
+# Ship the message catalogs and prompt templates with the package so the
+# CLI works once installed, not just from a source checkout.
+dramaturgy = ["catalogs/cli/*.json", "catalogs/html/*.json", "prompts/*.md"]

@@ -1,0 +1,61 @@
+{
+  "common.no_config": "config.json not found. Run setup.py first: {path}",
+  "common.wrote": "Wrote: {path}",
+  "common.read": "Read: {path}",
+  "common.done": "Done.",
+  "common.using_langs": "Language settings: ui_lang={ui_lang} content_lang={content_lang}",
+
+  "setup.start": "Starting setup.",
+  "setup.prompt_ui_lang": "Choose the UI/CLI language {choices} [{default}]: ",
+  "setup.prompt_content_lang": "Choose the generated-content language {choices} [{default}]: ",
+  "setup.prompt_project_name": "Enter the project name [{default}]: ",
+  "setup.prompt_repo_root": "Enter the repository root [{default}]: ",
+  "setup.invalid_lang": "Unsupported language: {lang} (supported: {choices})",
+  "setup.exists": "Updating the existing config.json.",
+  "setup.created": "Created config.json: {path}",
+  "setup.summary": "ui_lang={ui_lang}, content_lang={content_lang}, project={name}",
+
+  "analyze_repo.start": "Analyzing repository: {root}",
+  "analyze_repo.counted": "Indexed {files} files, {lines} lines.",
+
+  "analyze_schema.start": "Analyzing the database schema.",
+  "analyze_schema.no_input": "No schema input found. Pass an SQL/DDL file with --schema.",
+  "analyze_schema.counted": "Extracted {tables} tables.",
+
+  "candidates.start": "Measuring area candidates.",
+  "candidates.done": "Wrote candidate material.",
+
+  "prompt.start": "Generating the area-tree prompt (content_lang={content_lang}).",
+  "prompt.missing_template": "Prompt template not found: {path}",
+
+  "pack.start": "Building area pack: {area_id}",
+  "pack.area_not_found": "Area not found in area-tree.json: {area_id}",
+  "pack.too_large": "Warning: estimated tokens {tokens} exceed the limit {limit}. Consider splitting into natural sub-areas (no automatic split is performed).",
+  "pack.estimate": "Estimated tokens: {tokens}",
+
+  "subdivision.start": "Proposing sub-area candidates: {area_id}",
+
+  "merge.start": "Merging area maps.",
+  "merge.lang_mismatch": "Warning: input content_lang values differ: {langs}",
+  "merge.duplicate_id": "Duplicate id: {id}",
+  "merge.merged": "Merged {count} areas.",
+
+  "validate.start": "Checking consistency.",
+  "validate.ok": "Validation passed (errors {errors} / warnings {warnings}).",
+  "validate.failed": "Validation found problems (errors {errors} / warnings {warnings}).",
+  "validate.missing_file": "Referenced file does not exist: {ref}",
+  "validate.unknown_table": "Table not in schema-index: {name}",
+  "validate.unknown_api": "API not in source-index: {name}",
+  "validate.unknown_concept": "Concept not in concepts: {name}",
+  "validate.parent_child_mismatch": "Parent/child relationship is inconsistent: {detail}",
+  "validate.unknown_related": "Nonexistent related_area_id: {id}",
+  "validate.cycle": "Cycle detected: {detail}",
+  "validate.low_confidence": "Items with confidence: low: {count}",
+  "validate.bad_lang": "Unsupported language code: {field}={lang}",
+  "validate.lang_config_mismatch": "content_lang does not match config: map={map} config={config}",
+  "validate.missing_content_lang": "Missing content_lang field: {file}",
+  "validate.catalog_problem": "Message catalog problem: {detail}",
+
+  "render.start": "Rendering HTML (ui_lang={ui_lang} / content_lang={content_lang}).",
+  "render.done": "Wrote HTML: {path}"
+}

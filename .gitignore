@@ -1,0 +1,11 @@
+# Generated meaning-map workspace (intermediate artifacts + HTML output).
+# The canonical sources are the per-project area-tree.json / meaning-map.json,
+# which a user commits inside their own target repo, not here.
+.meaning-map/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/

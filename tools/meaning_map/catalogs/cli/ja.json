@@ -1,0 +1,61 @@
+{
+  "common.no_config": "config.json が見つかりません。先に setup.py を実行してください: {path}",
+  "common.wrote": "出力しました: {path}",
+  "common.read": "読み込みました: {path}",
+  "common.done": "完了しました。",
+  "common.using_langs": "言語設定 ui_lang={ui_lang} content_lang={content_lang}",
+
+  "setup.start": "セットアップを開始します。",
+  "setup.prompt_ui_lang": "UI/CLIの言語を選んでください {choices} [{default}]: ",
+  "setup.prompt_content_lang": "生成内容の言語を選んでください {choices} [{default}]: ",
+  "setup.prompt_project_name": "プロジェクト名を入力してください [{default}]: ",
+  "setup.prompt_repo_root": "リポジトリのルートを入力してください [{default}]: ",
+  "setup.invalid_lang": "対応していない言語です: {lang}（対応: {choices}）",
+  "setup.exists": "既存の config.json を更新します。",
+  "setup.created": "config.json を作成しました: {path}",
+  "setup.summary": "ui_lang={ui_lang}, content_lang={content_lang}, project={name}",
+
+  "analyze_repo.start": "リポジトリを解析しています: {root}",
+  "analyze_repo.counted": "ファイル {files} 件、{lines} 行を索引しました。",
+
+  "analyze_schema.start": "DBスキーマを解析しています。",
+  "analyze_schema.no_input": "スキーマ入力が見つかりません。--schema でSQL/DDLファイルを指定してください。",
+  "analyze_schema.counted": "テーブル {tables} 件を抽出しました。",
+
+  "candidates.start": "領域候補を計測しています。",
+  "candidates.done": "候補材料を出力しました。",
+
+  "prompt.start": "領域ツリー作成プロンプトを生成しています（content_lang={content_lang}）。",
+  "prompt.missing_template": "プロンプトテンプレートが見つかりません: {path}",
+
+  "pack.start": "領域パックを作成しています: {area_id}",
+  "pack.area_not_found": "area-tree.json に領域がありません: {area_id}",
+  "pack.too_large": "警告: 推定トークン数 {tokens} が上限 {limit} を超えています。自然な子領域への分割を検討してください（自動分割はしません）。",
+  "pack.estimate": "推定トークン数: {tokens}",
+
+  "subdivision.start": "子領域候補を提案しています: {area_id}",
+
+  "merge.start": "領域マップを統合しています。",
+  "merge.lang_mismatch": "警告: 入力の content_lang が一致しません: {langs}",
+  "merge.duplicate_id": "重複ID: {id}",
+  "merge.merged": "{count} 領域を統合しました。",
+
+  "validate.start": "整合性を検査しています。",
+  "validate.ok": "検査に合格しました（エラー {errors} / 警告 {warnings}）。",
+  "validate.failed": "検査で問題が見つかりました（エラー {errors} / 警告 {warnings}）。",
+  "validate.missing_file": "参照先ファイルが存在しません: {ref}",
+  "validate.unknown_table": "schema-index に存在しないテーブル: {name}",
+  "validate.unknown_api": "source-index に存在しないAPI: {name}",
+  "validate.unknown_concept": "concepts に存在しない概念: {name}",
+  "validate.parent_child_mismatch": "親子関係が不整合です: {detail}",
+  "validate.unknown_related": "存在しない related_area_id: {id}",
+  "validate.cycle": "循環参照を検出しました: {detail}",
+  "validate.low_confidence": "confidence: low の項目: {count} 件",
+  "validate.bad_lang": "対応していない言語コード: {field}={lang}",
+  "validate.lang_config_mismatch": "content_lang が config と一致しません: map={map} config={config}",
+  "validate.missing_content_lang": "content_lang フィールドがありません: {file}",
+  "validate.catalog_problem": "メッセージカタログの問題: {detail}",
+
+  "render.start": "HTMLを生成しています（ui_lang={ui_lang} / content_lang={content_lang}）。",
+  "render.done": "HTMLを出力しました: {path}"
+}

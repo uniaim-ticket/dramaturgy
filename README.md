@@ -65,12 +65,46 @@ Supported languages: **`ja`** and **`en`**. A single canonical JSON holds one
 
 ## Install
 
+Installing exposes the `dra` (and full-name `dramaturgy`) command. Pick one:
+
 ```bash
-pip install -e .        # exposes the `dra` (and `dramaturgy`) command
+# A) virtual environment (recommended, no system impact)
+python3 -m venv .venv
+source .venv/bin/activate      # Windows: .venv\Scripts\activate
+pip install -e .
+dra --version
+
+# B) pipx (isolated, on PATH globally)
+pipx install -e .
+
+# C) user install
+pip install -e . --user
 ```
 
-`dra` and the full name `dramaturgy` resolve to the same CLI. Without
-installing you can also run `python -m dramaturgy`.
+On Debian/Ubuntu and other PEP 668 "externally-managed" environments, a bare
+`pip install` is blocked. Use option A or B, or add
+`--break-system-packages` to a `--user` install:
+
+```bash
+pip install -e . --user --break-system-packages
+```
+
+If `dra` is installed but "command not found", the install's bin directory is
+not on your `PATH`. For a `--user` install add it:
+
+```bash
+export PATH="$(python3 -m site --user-base)/bin:$PATH"   # e.g. ~/.local/bin
+```
+
+**No-install fallback** — from the repo root you can always run the CLI as a
+module, which needs no install and no PATH changes:
+
+```bash
+python3 -m dramaturgy --version
+python3 -m dramaturgy serve --repo-root /path/to/target
+```
+
+Substitute `python3 -m dramaturgy` for `dra` in any command below.
 
 ## Usage — web UI (recommended)
 

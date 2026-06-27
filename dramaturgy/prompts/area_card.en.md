@@ -17,28 +17,49 @@ the tables/entities, APIs, screens, flows, and state transitions. Tables are
 not necessarily SQL — they may be defined in ORM models, migrations, or
 framework conventions, so judge from the file contents.
 
-Always organize the following:
+Concept tables (important):
+- Do not list physical tables (real DB tables / ORM models) directly.
+  Compress them into **concept tables** by business meaning (e.g. physical
+  `orders` + `order_items` + `order_status_histories` → concept "Order").
+- For each concept, list the supporting **physical table names in
+  physical_tables**.
+- Declare what this area does to each concept as **concept_crud** (ops is a
+  subset of "C"/"R"/"U"/"D", e.g. "CRU"). CRUD is expressed per concept table.
 
-- Area name
-- One-liner
-- Purpose
-- Actions per actor
-- Key concepts
-- Key flows
-- CRUD summary
-- Related database tables
-- Related APIs
-- Related screens
-- Related code
-- State transitions
-- Risk points
-- open_questions
-- confidence
+Output area-map JSON shape (for this area):
+
+```json
+{
+  "content_lang": "en",
+  "areas": [{
+    "id": "<this area id>",
+    "name": "", "one_liner": "", "purpose": "",
+    "parent_area_id": null, "child_area_ids": [], "related_area_ids": [],
+    "actors": [{"actor_id": "", "actions": [""]}],
+    "concepts": ["<concept_id>"],
+    "concept_crud": [{"concept_id": "<concept_id>", "ops": "CRUD"}],
+    "flows": [{"name": "", "steps": [""]}],
+    "apis": [""], "screens": [""], "code_refs": ["path/to/file"],
+    "risk_points": [""], "open_questions": [""],
+    "confidence": "high|medium|low"
+  }],
+  "concepts": [{
+    "id": "<concept_id>", "name": "", "description": "", "kind": "entity|state|event|value_object|external_system",
+    "physical_tables": ["<physical table/model name>"],
+    "states": [""], "code_refs": [""], "confidence": "high|medium|low"
+  }],
+  "actors": [{"id": "", "name": "", "description": "", "actions": [{"area_id": "", "action": "", "description": ""}]}],
+  "flows": []
+}
+```
 
 Notes:
 - Do not cram too much implementation detail into the body.
-- However, keep references to the supporting code, database, and APIs.
+- However, keep references to the supporting code/tables (physical_tables,
+  code_refs).
 - Separate inference from evidence.
+- crud_by_area / related_areas are generated automatically on merge, so you
+  need not write them — only get this area's concept_crud right.
 - Write natural-language fields in English and include "content_lang": "en".
 - Output JSON only.
 

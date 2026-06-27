@@ -206,9 +206,76 @@ class PipelineTests(unittest.TestCase):
             self.assertEqual(0, dra(["render", "--repo-root", d]))
             html = (ws / "meaning-map.html").read_text()
             # English chrome, content language note present, lang=ja.
-            self.assertIn("Overview", html)
+            self.assertIn("Concept tables", html)   # English nav label
             self.assertIn("Content language: ja", html)
             self.assertIn('lang="ja"', html)
+
+
+class ConceptCrudTests(unittest.TestCase):
+    """The concept table is the canonical home of CRUD; merge aggregates the
+    per-area declarations so it can be read from either side, and the HTML
+    renders both directions."""
+
+    def _two_area_maps(self):
+        sales = {
+            "content_lang": "ja", "system": {"name": "S"},
+            "areas": [{"id": "sales", "name": "販売", "one_liner": "x",
+                       "concepts": ["order", "ticket"],
+                       "related_area_ids": [], "child_area_ids": [],
+                       "concept_crud": [{"concept_id": "order", "ops": "CRU"},
+                                        {"concept_id": "ticket", "ops": "CR"}],
+                       "confidence": "high"}],
+            "concepts": [
+                {"id": "order", "name": "注文", "kind": "entity",
+                 "physical_tables": ["orders", "order_items"]},
+                {"id": "ticket", "name": "チケット", "kind": "entity",
+                 "physical_tables": ["tickets"]}],
+            "actors": [], "flows": []}
+        admin = {
+            "content_lang": "ja", "system": {"name": "S"},
+            "areas": [{"id": "admin", "name": "管理", "one_liner": "y",
+                       "concepts": ["order"],
+                       "related_area_ids": [], "child_area_ids": [],
+                       "concept_crud": [{"concept_id": "order",
+                                         "ops": ["R", "U", "D"]}],
+                       "confidence": "medium"}],
+            "concepts": [], "actors": [], "flows": []}
+        return sales, admin
+
+    def test_merge_aggregates_concept_crud(self):
+        from dramaturgy.commands.merge_maps import merge
+
+        class _UI:
+            def t(self, *a, **k):
+                return ""
+
+        merged, _ = merge(list(self._two_area_maps()), _UI())
+        order = next(c for c in merged["concepts"] if c["id"] == "order")
+        # Physical tables preserved; CRUD aggregated from both areas.
+        self.assertEqual(order["physical_tables"], ["orders", "order_items"])
+        by_area = {e["area_id"]: e["ops"] for e in order["crud_by_area"]}
+        self.assertEqual(by_area, {"sales": "CRU", "admin": "RUD"})
+        self.assertEqual(sorted(order["related_areas"]), ["admin", "sales"])
+
+    def test_render_shows_boxes_concepts_and_dual_crud(self):
+        from dramaturgy.commands.merge_maps import merge
+        from dramaturgy.commands.render_html import render_html
+
+        class _UI:
+            def t(self, *a, **k):
+                return ""
+
+        merged, _ = merge(list(self._two_area_maps()), _UI())
+        html = render_html(merged, "ja")
+        # No overview; areas are expandable boxes.
+        self.assertNotIn('id="overview"', html)
+        self.assertEqual(html.count('<details class="box"'), 2)
+        # Concept-tables section shows physical tables.
+        self.assertIn("orders", html)
+        self.assertIn("order_items", html)
+        # Dual CRUD toggle present, both directions rendered.
+        self.assertIn("crud-by-area", html)
+        self.assertIn("crud-by-concept", html)
 
 
 if __name__ == "__main__":

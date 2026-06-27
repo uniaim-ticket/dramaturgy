@@ -422,11 +422,13 @@ meaning-map.json からHTMLを生成する。
 
 HTMLに必要なビュー:
 
-* 全体地図
-* 業務領域カード
+* 業務領域: まず全領域をボックスで一覧し、クリックで詳細を展開する（「全体地図」のような
+  無意味な俯瞰図は作らない）
+* 概念テーブル: 物理テーブルを業務的意味でまとめた概念テーブルと、それを使う領域の対応
+  （各概念に物理テーブル名を併記する）
+* CRUD: 概念テーブルごとに「どの領域でCRUDされるか」を正本データとして持ち、
+  **領域から見る／概念テーブルから見る** の双方向で表示する
 * 登場人物ビュー
-* 概念ビュー
-* CRUDマトリクス
 * 開発者向け参照ビュー
 * 検証結果ビュー
 
@@ -551,9 +553,10 @@ HTMLに必要なビュー:
         }
       ],
       "concepts": [],
+      "concept_crud": [
+        { "concept_id": "", "ops": "CRUD" }
+      ],
       "flows": [],
-      "crud_summary": {},
-      "tables": [],
       "apis": [],
       "screens": [],
       "code_refs": [],
@@ -568,7 +571,10 @@ HTMLに必要なビュー:
       "name": "",
       "description": "",
       "kind": "entity|state|event|value_object|external_system|screen|api",
-      "related_tables": [],
+      "physical_tables": [],
+      "crud_by_area": [
+        { "area_id": "", "ops": "CRUD" }
+      ],
       "related_areas": [],
       "states": [],
       "code_refs": [],
@@ -591,6 +597,18 @@ HTMLに必要なビュー:
   "validations": []
 }
 ```
+
+### 概念テーブルとCRUDのモデル（重要）
+
+* **物理テーブル**（実際のDBテーブルやORMモデル）は、業務的意味でまとめた**概念テーブル**に
+  圧縮する。概念には `physical_tables` で根拠となる物理テーブル名を持たせる。
+* **CRUDの正本は概念テーブル側**に置く。各領域は自分が触る概念について
+  `concept_crud: [{concept_id, ops}]` を宣言するだけにする（ops は "C"/"R"/"U"/"D" の部分集合）。
+* `merge` が各領域の `concept_crud` を集約し、概念側に
+  `crud_by_area: [{area_id, ops}]` と `related_areas` を生成する。これにより
+  同じCRUDデータを「領域から見る」「概念テーブルから見る」の双方向で表示できる。
+* 旧 `crud_summary` / 領域側 `tables` フィールドは廃止（CRUDは概念単位、テーブルは
+  概念の `physical_tables` に集約）。
 
 ## Claude用プロンプト
 

@@ -27,10 +27,10 @@ def load_prompt(name: str, content_lang: str) -> str:
 
 def render_prompt(name: str, content_lang: str, **slots) -> str:
     template = load_prompt(name, content_lang)
-    # Use a defaultdict-like format so missing slots become empty rather
-    # than raising; callers pass everything they have.
-    class _Safe(dict):
-        def __missing__(self, key):  # noqa: D401
-            return "{" + key + "}"
-
-    return template.format_map(_Safe(slots))
+    # Substitute ONLY the known ``{slot}`` placeholders via literal
+    # replacement. We intentionally do NOT use str.format, because the
+    # templates contain literal JSON examples with their own ``{ }`` that
+    # must pass through untouched (str.format would try to parse them).
+    for key, value in slots.items():
+        template = template.replace("{" + key + "}", str(value))
+    return template

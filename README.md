@@ -134,6 +134,11 @@ Or step through manually:
    the change is **written back to `meaning-map.json`** and the preview
    refreshes.
 
+The rendered map shows: business areas as a grid of clickable boxes that
+expand to detail; **concept tables** (physical tables grouped by business
+meaning) with the areas that use them; and **CRUD** viewable both *by area*
+and *by concept table* (the same concept-centric data, two directions).
+
 ## Usage — inside Claude Code
 
 With this repo's `.claude/commands/` available, run in a Claude Code session

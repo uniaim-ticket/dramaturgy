@@ -1,28 +1,29 @@
 #!/usr/bin/env python3
-"""render_html.py — render meaning-map.json into a single static HTML.
+"""render_html — render meaning-map.json into a single static HTML.
 
-Language model (see rfp.md):
-- Chrome (labels, nav, headings) comes from the HTML catalog for ``ui_lang``.
-- Body content (area names, descriptions, concepts) is shown as-is in the
-  map's ``content_lang``.
-- ``<html lang>`` reflects the content language; a note shows both when they
-  differ.
+Language model (see rfp.md): chrome (labels/nav) comes from the ui_lang HTML
+catalog; body content stays in the map's content_lang. ``<html lang>``
+reflects the content language.
 
-Produces a self-contained HTML file (no external assets) with the views
-required by the RFP: overview, areas, actors, concepts, CRUD matrix,
-developer reference, and validation.
+Views:
+- Areas: a grid of clickable boxes; each expands (native <details>) to its
+  detail card. No "overall map" section (it carried no real information).
+- Concept tables: each concept with the physical tables it abstracts and the
+  areas that use it.
+- CRUD: the same concept-centric data shown two ways — by area and by concept.
+- Developer reference and validation.
 """
 
 from __future__ import annotations
 
 import argparse
 import html
+import json
 from pathlib import Path
 
-
-from ..common.config import add_lang_args, resolve  # noqa: E402
-from ..common.i18n import Catalog  # noqa: E402
-from ..common.paths import read_json, workspace_dir  # noqa: E402
+from ..common.config import add_lang_args, resolve
+from ..common.i18n import Catalog
+from ..common.paths import read_json, workspace_dir
 
 CSS = """
 * { box-sizing: border-box; }
@@ -32,31 +33,58 @@ header { background: #1c2733; color: #fff; padding: 16px 24px; }
 header h1 { margin: 0; font-size: 20px; }
 header .meta { font-size: 12px; opacity: .8; margin-top: 4px; }
 nav { position: sticky; top: 0; background: #243140; padding: 8px 24px;
-  display: flex; gap: 16px; flex-wrap: wrap; }
+  display: flex; gap: 16px; flex-wrap: wrap; z-index: 10; }
 nav a { color: #cfe0f0; text-decoration: none; font-size: 13px; }
 nav a:hover { color: #fff; }
 main { max-width: 1100px; margin: 0 auto; padding: 24px; }
 section { background: #fff; border: 1px solid #e2e6ea; border-radius: 8px;
   padding: 20px; margin-bottom: 24px; }
 section > h2 { margin-top: 0; border-bottom: 2px solid #eef1f4; padding-bottom: 8px; }
-.card { border: 1px solid #e2e6ea; border-radius: 6px; padding: 14px;
-  margin-bottom: 14px; }
-.card h3 { margin: 0 0 6px; }
+
+/* Area boxes: grid of clickable cards that expand in place. */
+.box-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px; }
+details.box { border: 1px solid #d4dae0; border-radius: 8px; background: #fbfcfd;
+  overflow: hidden; }
+details.box[open] { grid-column: 1 / -1; background: #fff; border-color: #9db4cc; }
+details.box > summary { list-style: none; cursor: pointer; padding: 14px 16px;
+  font-weight: 600; display: flex; align-items: baseline; justify-content: space-between; }
+details.box > summary::-webkit-details-marker { display: none; }
+details.box > summary:hover { background: #eef3f8; }
+details.box .sum-name { font-size: 15px; }
+details.box .sum-id { color: #8b95a1; font-size: 12px; font-weight: 400; }
+details.box .body { padding: 0 16px 16px; border-top: 1px solid #eef1f4; }
+
 .kv { display: grid; grid-template-columns: 160px 1fr; gap: 4px 12px;
-  font-size: 14px; margin-top: 8px; }
+  font-size: 14px; margin-top: 10px; }
 .kv dt { color: #5a6573; font-weight: 600; }
 .kv dd { margin: 0; }
 .tag { display: inline-block; background: #eef1f4; border-radius: 4px;
   padding: 1px 8px; margin: 2px; font-size: 12px; }
+.tag.area { background: #e5eefc; }
+.tag.concept { background: #e9f5ea; }
+.tag.phys { background: #f3eee2; font-family: ui-monospace, monospace; }
 .conf-high { color: #1a7f37; } .conf-medium { color: #9a6700; }
 .conf-low { color: #cf222e; font-weight: 700; }
 .low-note { background: #fff5f5; border-left: 3px solid #cf222e;
   padding: 6px 10px; font-size: 13px; margin-top: 8px; }
 table { border-collapse: collapse; width: 100%; font-size: 13px; }
-th, td { border: 1px solid #e2e6ea; padding: 6px 8px; text-align: left; }
+th, td { border: 1px solid #e2e6ea; padding: 6px 8px; text-align: left; vertical-align: top; }
 th { background: #f0f3f6; }
+.crud { font-family: ui-monospace, monospace; letter-spacing: 1px; }
+.crud .on { color: #1a7f37; font-weight: 700; }
+.crud .off { color: #cbd2d9; }
 code { background: #f0f3f6; padding: 1px 4px; border-radius: 3px; font-size: 12px; }
 .muted { color: #8b95a1; }
+.subtabs { display: flex; gap: 8px; margin-bottom: 12px; }
+.subtabs label { font-size: 13px; padding: 4px 12px; border: 1px solid #c4ccd4;
+  border-radius: 6px; cursor: pointer; background: #fff; }
+.subtabs input { display: none; }
+.subtabs input:checked + label { background: #2563eb; color: #fff; border-color: #2563eb; }
+/* CSS-only toggle between the two CRUD views. */
+#crud-by-area, #crud-by-concept { display: none; }
+#crud-pick-area:checked ~ #crud-by-area { display: block; }
+#crud-pick-concept:checked ~ #crud-by-concept { display: block; }
 """
 
 
@@ -64,30 +92,79 @@ def e(s) -> str:
     return html.escape(str(s)) if s is not None else ""
 
 
-def tags(items) -> str:
+def tags(items, cls: str = "") -> str:
     if not items:
         return '<span class="muted">—</span>'
-    return "".join(f'<span class="tag">{e(i)}</span>' for i in items)
+    c = f"tag {cls}".strip()
+    return "".join(f'<span class="{c}">{e(i)}</span>' for i in items)
 
 
 def conf_badge(cat: Catalog, level: str) -> str:
     if not level:
         return ""
-    label = cat.t(f"confidence.{level}")
-    return f'<span class="conf-{e(level)}">{e(label)}</span>'
+    return f'<span class="conf-{e(level)}">{e(cat.t(f"confidence.{level}"))}</span>'
 
 
-def render_area(cat: Catalog, area: dict) -> str:
+def crud_cells(ops) -> str:
+    """Render C R U D as colored letters (present = on).
+
+    Accepts ops as a string ("CRU") or a list (["C","R","U"]).
+    """
+    if isinstance(ops, (list, tuple)):
+        ops = "".join(ops)
+    ops = str(ops or "").upper()
+    out = []
+    for ch in "CRUD":
+        cls = "on" if ch in ops else "off"
+        out.append(f'<span class="{cls}">{ch}</span>')
+    return f'<span class="crud">{"".join(out)}</span>'
+
+
+def _concept_name(concepts: dict, cid: str) -> str:
+    c = concepts.get(cid)
+    return c.get("name") if c and c.get("name") else cid
+
+
+def _area_name(areas: dict, aid: str) -> str:
+    a = areas.get(aid)
+    return a.get("name") if a and a.get("name") else aid
+
+
+def render_area_box(cat: Catalog, area: dict, concepts: dict) -> str:
+    # The concepts this area touches, with its CRUD ops (area-side view).
+    crud_rows = ""
+    for entry in area.get("concept_crud", []) or []:
+        cid = entry.get("concept_id")
+        crud_rows += (f"<tr><td>{e(_concept_name(concepts, cid))}</td>"
+                      f"<td>{crud_cells(entry.get('ops', ''))}</td></tr>")
+    crud_block = (f'<table><tr><th>{e(cat.t("label.concepts"))}</th>'
+                  f'<th>CRUD</th></tr>{crud_rows}</table>'
+                  if crud_rows else f'<span class="muted">{e(cat.t("empty.none"))}</span>')
+
+    actor_lines = ""
+    for a in area.get("actors", []) or []:
+        acts = a.get("actions", [])
+        acts = ", ".join(acts) if isinstance(acts, list) else str(acts)
+        actor_lines += f"<li><b>{e(a.get('actor_id'))}</b>: {e(acts)}</li>"
+    flows = ""
+    for f in area.get("flows", []) or []:
+        if isinstance(f, dict):
+            flows += f"<li>{e(f.get('name'))}</li>"
+        else:
+            flows += f"<li>{e(f)}</li>"
+
     rows = [
-        (cat.t("label.one_liner"), e(area.get("one_liner"))),
-        (cat.t("label.purpose"), e(area.get("purpose"))),
+        (cat.t("label.purpose"), e(area.get("purpose")) or "—"),
         (cat.t("label.parent"), e(area.get("parent_area_id")) or "—"),
-        (cat.t("label.children"), tags(area.get("child_area_ids"))),
-        (cat.t("label.related"), tags(area.get("related_area_ids"))),
-        (cat.t("label.concepts"), tags(area.get("concepts"))),
-        (cat.t("label.tables"), tags(area.get("tables"))),
+        (cat.t("label.children"), tags(area.get("child_area_ids"), "area")),
+        (cat.t("label.related"), tags(area.get("related_area_ids"), "area")),
+        (cat.t("label.actors"), f"<ul>{actor_lines}</ul>" if actor_lines else "—"),
+        (cat.t("label.crud"), crud_block),
+        (cat.t("label.flows"), f"<ul>{flows}</ul>" if flows else "—"),
         (cat.t("label.apis"), tags(area.get("apis"))),
         (cat.t("label.screens"), tags(area.get("screens"))),
+        (cat.t("label.code_refs"),
+         " ".join(f"<code>{e(r)}</code>" for r in area.get("code_refs", [])) or "—"),
         (cat.t("label.risk_points"), tags(area.get("risk_points"))),
         (cat.t("label.open_questions"), tags(area.get("open_questions"))),
         (cat.t("label.confidence"), conf_badge(cat, area.get("confidence"))),
@@ -95,10 +172,85 @@ def render_area(cat: Catalog, area: dict) -> str:
     kv = "".join(f"<dt>{k}</dt><dd>{v}</dd>" for k, v in rows)
     low = (f'<div class="low-note">{e(cat.t("note.low_confidence"))}</div>'
            if area.get("confidence") == "low" else "")
-    return (f'<div class="card" id="area-{e(area.get("id"))}">'
-            f'<h3>{e(area.get("name"))} '
-            f'<span class="muted">({e(area.get("id"))})</span></h3>'
-            f'<dl class="kv">{kv}</dl>{low}</div>')
+    return (
+        f'<details class="box" id="area-{e(area.get("id"))}">'
+        f'<summary><span class="sum-name">{e(area.get("name"))}</span>'
+        f'<span class="sum-id">{e(area.get("id"))}</span></summary>'
+        f'<div class="body"><p>{e(area.get("one_liner"))}</p>'
+        f'<dl class="kv">{kv}</dl>{low}</div></details>')
+
+
+def render_areas(cat: Catalog, areas: list, concepts: dict) -> str:
+    if not areas:
+        return f'<p class="muted">{e(cat.t("empty.none"))}</p>'
+    boxes = "".join(render_area_box(cat, a, concepts) for a in areas)
+    return (f'<p class="muted">{e(cat.t("areas.hint"))}</p>'
+            f'<div class="box-grid">{boxes}</div>')
+
+
+def render_concept_tables(cat: Catalog, concepts: list, areas: dict) -> str:
+    if not concepts:
+        return f'<p class="muted">{e(cat.t("empty.none"))}</p>'
+    rows = ""
+    for c in concepts:
+        area_links = [_area_name(areas, aid) for aid in c.get("related_areas", [])]
+        rows += (
+            f"<tr><td><b>{e(c.get('name'))}</b><br>"
+            f"<span class='muted'>{e(c.get('description'))}</span></td>"
+            f"<td>{tags(c.get('physical_tables'), 'phys')}</td>"
+            f"<td>{tags(area_links, 'area')}</td>"
+            f"<td>{tags(c.get('states'))}</td></tr>")
+    return (
+        f'<p class="muted">{e(cat.t("concepts.hint"))}</p>'
+        f"<table><tr><th>{e(cat.t('label.concept_table'))}</th>"
+        f"<th>{e(cat.t('label.physical_tables'))}</th>"
+        f"<th>{e(cat.t('label.related'))}</th>"
+        f"<th>{e(cat.t('label.states'))}</th></tr>{rows}</table>")
+
+
+def render_crud(cat: Catalog, areas: list, concepts: list) -> str:
+    """Two views of the same concept-centric CRUD data."""
+    area_map = {a["id"]: a for a in areas}
+    concept_map = {c["id"]: c for c in concepts}
+
+    # By area: flat table area | concept | CRUD.
+    flat_area = ""
+    for area in areas:
+        for entry in area.get("concept_crud", []) or []:
+            cid = entry.get("concept_id")
+            flat_area += (f"<tr><td>{e(area.get('name'))}</td>"
+                          f"<td>{e(_concept_name(concept_map, cid))}</td>"
+                          f"<td>{crud_cells(entry.get('ops', ''))}</td></tr>")
+    by_area = (
+        f"<table><tr><th>{e(cat.t('nav.areas'))}</th>"
+        f"<th>{e(cat.t('label.concept_table'))}</th><th>CRUD</th></tr>"
+        f"{flat_area}</table>" if flat_area
+        else f'<p class="muted">{e(cat.t("empty.none"))}</p>')
+
+    # By concept: rows = concept | area | CRUD (from crud_by_area).
+    flat_concept = ""
+    for c in concepts:
+        for entry in c.get("crud_by_area", []) or []:
+            aid = entry.get("area_id")
+            flat_concept += (f"<tr><td>{e(c.get('name'))}</td>"
+                             f"<td>{e(_area_name(area_map, aid))}</td>"
+                             f"<td>{crud_cells(entry.get('ops', ''))}</td></tr>")
+    by_concept = (
+        f"<table><tr><th>{e(cat.t('label.concept_table'))}</th>"
+        f"<th>{e(cat.t('nav.areas'))}</th><th>CRUD</th></tr>"
+        f"{flat_concept}</table>" if flat_concept
+        else f'<p class="muted">{e(cat.t("empty.none"))}</p>')
+
+    # CSS-only toggle between the two directions.
+    return (
+        '<input type="radio" name="crudview" id="crud-pick-area" checked>'
+        '<input type="radio" name="crudview" id="crud-pick-concept">'
+        '<div class="subtabs">'
+        f'<label for="crud-pick-area">{e(cat.t("crud.by_area"))}</label>'
+        f'<label for="crud-pick-concept">{e(cat.t("crud.by_concept"))}</label>'
+        '</div>'
+        f'<div id="crud-by-area">{by_area}</div>'
+        f'<div id="crud-by-concept">{by_concept}</div>')
 
 
 def render_actors(cat: Catalog, actors: list) -> str:
@@ -110,55 +262,22 @@ def render_actors(cat: Catalog, actors: list) -> str:
             f"— {e(act.get('description'))}</li>"
             for act in a.get("actions", []))
         cards.append(
-            f'<div class="card"><h3>{e(a.get("name"))}</h3>'
+            f'<div class="box" style="padding:14px;margin-bottom:12px">'
+            f'<h3 style="margin:0 0 6px">{e(a.get("name"))}</h3>'
             f'<p>{e(a.get("description"))}</p><ul>{actions}</ul></div>')
     return "".join(cards) or f'<p class="muted">{e(cat.t("empty.none"))}</p>'
 
 
-def render_concepts(cat: Catalog, concepts: list) -> str:
-    cards = []
-    for c in concepts:
-        rows = [
-            ("kind", e(c.get("kind"))),
-            (cat.t("label.tables"), tags(c.get("related_tables"))),
-            (cat.t("label.states"), tags(c.get("states"))),
-            (cat.t("label.confidence"), conf_badge(cat, c.get("confidence"))),
-        ]
-        kv = "".join(f"<dt>{k}</dt><dd>{v}</dd>" for k, v in rows)
-        cards.append(
-            f'<div class="card" id="concept-{e(c.get("id"))}">'
-            f'<h3>{e(c.get("name"))}</h3><p>{e(c.get("description"))}</p>'
-            f'<dl class="kv">{kv}</dl></div>')
-    return "".join(cards) or f'<p class="muted">{e(cat.t("empty.none"))}</p>'
-
-
-def render_crud(cat: Catalog, areas: list) -> str:
-    rows = []
-    for area in areas:
-        crud = area.get("crud_summary") or {}
-        for concept, ops in crud.items():
-            ops_str = ops if isinstance(ops, str) else ", ".join(ops)
-            rows.append(f"<tr><td>{e(area.get('name'))}</td>"
-                        f"<td>{e(concept)}</td><td>{e(ops_str)}</td></tr>")
-    if not rows:
-        return f'<p class="muted">{e(cat.t("empty.none"))}</p>'
-    return (f"<table><tr><th>{e(cat.t('nav.areas'))}</th>"
-            f"<th>{e(cat.t('label.concepts'))}</th>"
-            f"<th>CRUD</th></tr>{''.join(rows)}</table>")
-
-
 def render_dev(cat: Catalog, areas: list) -> str:
-    rows = []
+    rows = ""
     for area in areas:
         refs = ", ".join(f"<code>{e(r)}</code>" for r in area.get("code_refs", []))
-        rows.append(f"<tr><td>{e(area.get('name'))}</td>"
-                    f"<td>{tags(area.get('tables'))}</td>"
-                    f"<td>{tags(area.get('apis'))}</td>"
-                    f"<td>{refs or '—'}</td></tr>")
+        rows += (f"<tr><td>{e(area.get('name'))}</td>"
+                 f"<td>{tags(area.get('apis'))}</td>"
+                 f"<td>{refs or '—'}</td></tr>")
     return (f"<table><tr><th>{e(cat.t('nav.areas'))}</th>"
-            f"<th>{e(cat.t('label.tables'))}</th>"
             f"<th>{e(cat.t('label.apis'))}</th>"
-            f"<th>{e(cat.t('label.code_refs'))}</th></tr>{''.join(rows)}</table>")
+            f"<th>{e(cat.t('label.code_refs'))}</th></tr>{rows}</table>")
 
 
 def render_validation(cat: Catalog, mm: dict) -> str:
@@ -166,7 +285,8 @@ def render_validation(cat: Catalog, mm: dict) -> str:
     report = mm.get("merge_report", {})
     blocks = []
     if report:
-        blocks.append(f"<pre><code>{e(__import__('json').dumps(report, ensure_ascii=False, indent=2))}</code></pre>")
+        blocks.append(
+            f"<pre><code>{e(json.dumps(report, ensure_ascii=False, indent=2))}</code></pre>")
     if items:
         blocks.append("<ul>" + "".join(f"<li>{e(v)}</li>" for v in items) + "</ul>")
     return "".join(blocks) or f'<p class="muted">{e(cat.t("empty.none"))}</p>'
@@ -176,7 +296,6 @@ def render_html(mm: dict, ui_lang: str) -> str:
     content_lang = mm.get("content_lang") or ui_lang
     cat = Catalog(ui_lang, domain="html")
     system = mm.get("system", {})
-    src = system.get("source_summary", {})
 
     lang_note = ""
     if content_lang != ui_lang:
@@ -184,27 +303,27 @@ def render_html(mm: dict, ui_lang: str) -> str:
                      f'{e(cat.t("note.content_lang", content_lang=content_lang))}</div>')
 
     nav_items = [
-        ("overview", "nav.overview"), ("areas", "nav.areas"),
-        ("actors", "nav.actors"), ("concepts", "nav.concepts"),
-        ("crud", "nav.crud"), ("dev", "nav.dev"),
-        ("validation", "nav.validation"),
+        ("areas", "nav.areas"), ("concepts", "nav.concepts"),
+        ("crud", "nav.crud"), ("actors", "nav.actors"),
+        ("dev", "nav.dev"), ("validation", "nav.validation"),
     ]
     nav = "".join(f'<a href="#{anchor}">{e(cat.t(key))}</a>'
                   for anchor, key in nav_items)
 
     areas = mm.get("areas", [])
+    concepts = mm.get("concepts", [])
+    concept_map = {c["id"]: c for c in concepts}
+    area_map = {a["id"]: a for a in areas}
+
     sections = [
-        f'<section id="overview"><h2>{e(cat.t("nav.overview"))}</h2>'
-        f'<h3>{e(system.get("name"))}</h3><p>{e(system.get("summary"))}</p>'
-        f'<p class="muted">{e(cat.t("footer.source_summary", files=src.get("files",0), lines=src.get("lines",0), tables=src.get("tables",0)))}</p></section>',
         f'<section id="areas"><h2>{e(cat.t("nav.areas"))}</h2>'
-        f'{"".join(render_area(cat, a) for a in areas)}</section>',
+        f'{render_areas(cat, areas, concept_map)}</section>',
+        f'<section id="concepts"><h2>{e(cat.t("nav.concepts"))}</h2>'
+        f'{render_concept_tables(cat, concepts, area_map)}</section>',
+        f'<section id="crud"><h2>{e(cat.t("nav.crud"))}</h2>'
+        f'{render_crud(cat, areas, concepts)}</section>',
         f'<section id="actors"><h2>{e(cat.t("nav.actors"))}</h2>'
         f'{render_actors(cat, mm.get("actors", []))}</section>',
-        f'<section id="concepts"><h2>{e(cat.t("nav.concepts"))}</h2>'
-        f'{render_concepts(cat, mm.get("concepts", []))}</section>',
-        f'<section id="crud"><h2>{e(cat.t("nav.crud"))}</h2>'
-        f'{render_crud(cat, areas)}</section>',
         f'<section id="dev"><h2>{e(cat.t("nav.dev"))}</h2>'
         f'{render_dev(cat, areas)}</section>',
         f'<section id="validation"><h2>{e(cat.t("nav.validation"))}</h2>'
@@ -221,6 +340,7 @@ def render_html(mm: dict, ui_lang: str) -> str:
 </head>
 <body>
 <header><h1>{e(cat.t("title"))} — {e(system.get("name"))}</h1>
+<div class="meta">{e(system.get("summary"))}</div>
 <div class="meta">{e(cat.t("footer.generated_at", generated_at=system.get("generated_at","")))}</div>
 {lang_note}</header>
 <nav>{nav}</nav>

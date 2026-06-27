@@ -29,6 +29,45 @@ def _merge_by_id(target: dict, items: list[dict], key: str, problems: list):
         target[ident] = item
 
 
+def _norm_ops(ops) -> str:
+    """Normalize a CRUD spec to an ordered subset of 'CRUD'."""
+    if isinstance(ops, (list, tuple)):
+        ops = "".join(ops)
+    letters = {c.upper() for c in str(ops) if c.upper() in "CRUD"}
+    return "".join(ch for ch in "CRUD" if ch in letters)
+
+
+def _aggregate_concept_crud(areas: dict, concepts: dict) -> None:
+    """Build concept.crud_by_area and concept.related_areas from the
+    per-area ``concept_crud`` declarations. The concept is the canonical
+    home of the CRUD data; areas just declare their slice."""
+    # concept_id -> {area_id -> set(ops)}
+    by_concept: dict[str, dict[str, set]] = defaultdict(lambda: defaultdict(set))
+    for area in areas.values():
+        aid = area.get("id")
+        for entry in area.get("concept_crud", []) or []:
+            cid = entry.get("concept_id")
+            if not cid:
+                continue
+            for ch in _norm_ops(entry.get("ops", "")):
+                by_concept[cid][aid].add(ch)
+
+    for cid, area_ops in by_concept.items():
+        concept = concepts.get(cid)
+        crud_by_area = [
+            {"area_id": aid, "ops": "".join(ch for ch in "CRUD" if ch in ops)}
+            for aid, ops in sorted(area_ops.items())
+        ]
+        if concept is None:
+            # Area references a concept not defined anywhere; keep it visible
+            # as a stub so the CRUD view still shows the relationship.
+            concept = {"id": cid, "name": cid, "kind": "entity",
+                       "_stub": True}
+            concepts[cid] = concept
+        concept["crud_by_area"] = crud_by_area
+        concept["related_areas"] = sorted(area_ops.keys())
+
+
 def merge(maps: list[dict], ui) -> tuple[dict, list]:
     problems: list = []
 
@@ -65,6 +104,12 @@ def merge(maps: list[dict], ui) -> tuple[dict, list]:
         if c.get("name"):
             name_to_ids[c["name"].strip().lower()].add(c["id"])
     name_drift = {n: sorted(ids) for n, ids in name_to_ids.items() if len(ids) > 1}
+
+    # Concept-centric CRUD: each area declares concept_crud[{concept_id, ops}].
+    # Aggregate it onto each concept as crud_by_area[{area_id, ops}], so the
+    # same data can be viewed from the area side or the concept side. Also
+    # backfill concept.related_areas from where it is used.
+    _aggregate_concept_crud(areas, concepts)
 
     # Backfill related links symmetrically and check parent/child.
     for area in areas.values():

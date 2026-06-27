@@ -355,10 +355,18 @@ class ClassificationComponentTests(unittest.TestCase):
             targets = api.list_review_targets()[1]
             self.assertIn("classifications", targets)
             self.assertIn("components", targets)
-            st, _ = api.create_finding({
+            st, f = api.create_finding({
                 "target_type": "classification", "target_id": "point_method",
                 "kind": "reframe", "comment": "値を増やす"})
             self.assertEqual(st, 201)
+            # It auto-runs; wait so the worker isn't writing during cleanup.
+            import time as _time
+            for _ in range(200):
+                cur = next(x for x in api.list_findings()[1]["findings"]
+                           if x["id"] == f["id"])
+                if cur["status"] in ("done", "error"):
+                    break
+                _time.sleep(0.02)
 
 
 if __name__ == "__main__":

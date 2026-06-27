@@ -49,6 +49,8 @@ class Router:
         self._add("PATCH", "/api/concept/<concept_id>", "h_patch_concept")
         self._add("GET", "/api/tags", "h_get_tags")
         self._add("PUT", "/api/tags", "h_put_tags")
+        self._add("GET", "/api/init-instructions", "h_get_init_instructions")
+        self._add("PUT", "/api/init-instructions", "h_put_init_instructions")
         self._add("POST", "/api/merge", "h_merge")
         self._add("GET", "/api/validate", "h_validate")
         self._add("POST", "/api/render", "h_render")
@@ -108,6 +110,12 @@ class Router:
 
     def h_put_tags(self, params, body, query):
         return self.api.put_tags(body or {})
+
+    def h_get_init_instructions(self, params, body, query):
+        return self.api.get_init_instructions()
+
+    def h_put_init_instructions(self, params, body, query):
+        return self.api.put_init_instructions(body or {})
 
     def h_merge(self, params, body, query):
         return self.api.merge(body or {})

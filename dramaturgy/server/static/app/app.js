@@ -6,6 +6,9 @@ const I18N = {
   ja: {
     "btn.save_config": "保存",
     "init.run": "Claudeで一括初期化",
+    "init.instr_toggle": "追加指示",
+    "init.instr_label": "Claudeへの追加指示（リポジトリごとに保存し、毎回の一括初期化で再利用されます）:",
+    "init.instr_save": "指示を保存",
     "init.running": "一括初期化を実行中…", "init.done": "一括初期化が完了しました",
     "job.running": "実行中…", "job.done": "完了", "job.error": "エラー", "job.idle": "応答待ち",
     "viewer.title": "意味地図プレビュー", "viewer.refresh": "更新",
@@ -32,6 +35,9 @@ const I18N = {
   en: {
     "btn.save_config": "Save",
     "init.run": "Initialize all with Claude",
+    "init.instr_toggle": "Instructions",
+    "init.instr_label": "Additional instructions for Claude (saved per repository, reused on every initialization):",
+    "init.instr_save": "Save instructions",
     "init.running": "Initializing…", "init.done": "Initialization complete",
     "job.running": "running…", "job.done": "done", "job.error": "error", "job.idle": "awaiting response",
     "viewer.title": "Meaning map preview", "viewer.refresh": "Refresh",
@@ -96,11 +102,34 @@ async function refreshState() {
   return data;
 }
 
+// ---- init instructions (repo-specific, reused across runs) -------------
+async function loadInitInstructions() {
+  const { status, data } = await api("GET", "/api/init-instructions");
+  if (status === 200) document.getElementById("init-instr").value = data.instructions || "";
+}
+
+async function saveInitInstructions() {
+  const text = document.getElementById("init-instr").value;
+  const { status } = await api("PUT", "/api/init-instructions", { instructions: text });
+  const el = document.getElementById("init-instr-status");
+  el.textContent = status === 200 ? t("saved") : t("save_failed");
+  el.className = status === 200 ? "status" : "status err";
+  setTimeout(() => (el.textContent = ""), 1500);
+}
+
+function toggleInitInstructions() {
+  const bar = document.getElementById("init-instr-bar");
+  bar.hidden = !bar.hidden;
+}
+
 // ---- one-shot full initialization --------------------------------------
 async function runInit() {
   const btn = document.getElementById("run-init");
   btn.disabled = true;
-  const { status, data } = await api("POST", "/api/jobs/init", {});
+  // Send the current textarea so an edit takes effect even if not yet saved;
+  // the server also persists it for reuse.
+  const instructions = document.getElementById("init-instr").value;
+  const { status, data } = await api("POST", "/api/jobs/init", { instructions });
   if (status !== 202) {
     showJob("init-job", { status: "error", error: data.error });
     btn.disabled = false;
@@ -435,6 +464,8 @@ async function saveConfig() {
 // ---- wire up -----------------------------------------------------------
 function init() {
   document.getElementById("run-init").onclick = runInit;
+  document.getElementById("toggle-init-instr").onclick = toggleInitInstructions;
+  document.getElementById("save-init-instr").onclick = saveInitInstructions;
   document.getElementById("refresh-view").onclick = refreshView;
   document.getElementById("toggle-queue").onclick = toggleQueue;
   document.getElementById("save-config").onclick = saveConfig;
@@ -473,6 +504,7 @@ function init() {
       document.getElementById("rv-continue").checked = !!data.continue_session;
     }
     loadFindings();
+    loadInitInstructions();
   });
 }
 

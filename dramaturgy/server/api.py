@@ -76,6 +76,28 @@ class Api:
         except FileNotFoundError:
             return None
 
+    # ---- init instructions (repo-specific, reused across init runs) -----
+    @property
+    def _instructions_path(self) -> Path:
+        return self.ws / "init-instructions.txt"
+
+    def _read_instructions(self) -> str:
+        try:
+            return self._instructions_path.read_text(encoding="utf-8")
+        except FileNotFoundError:
+            return ""
+
+    def get_init_instructions(self):
+        return 200, {"instructions": self._read_instructions()}
+
+    def put_init_instructions(self, body: dict):
+        text = (body or {}).get("instructions", "")
+        if not isinstance(text, str):
+            return 400, {"error": "instructions must be a string"}
+        self._instructions_path.parent.mkdir(parents=True, exist_ok=True)
+        self._instructions_path.write_text(text, encoding="utf-8")
+        return 200, {"instructions": text}
+
     # ---- config & state ------------------------------------------------
     def get_config(self):
         return 200, self._config().to_dict()
@@ -237,9 +259,11 @@ class Api:
     def start_area_tree_job(self, body: dict | None = None):
         body = body or {}
         cfg = self._config()
+        extra = self._read_instructions()
         try:
             prompt = area_tree_prompt(
-                self.repo_root, cfg.content_lang, cfg.project_name)
+                self.repo_root, cfg.content_lang, cfg.project_name,
+                extra_instructions=extra)
         except FileNotFoundError as exc:
             return 400, {"error": f"missing input: {exc}. Run analyze first."}
         return self._start_job("area_tree", prompt, {},
@@ -251,7 +275,8 @@ class Api:
             return 400, {"error": "area_id is required"}
         cfg = self._config()
         try:
-            prompt = area_card_prompt(self.repo_root, cfg.content_lang, area_id)
+            prompt = area_card_prompt(self.repo_root, cfg.content_lang, area_id,
+                                      extra_instructions=self._read_instructions())
         except KeyError:
             return 404, {"error": f"area '{area_id}' not in area-tree.json"}
         except FileNotFoundError as exc:
@@ -271,6 +296,10 @@ class Api:
         buttons remain usable afterwards for adjustments.
         """
         body = body or {}
+        # An "instructions" field in the request both persists (for reuse) and
+        # is applied to this run; otherwise the saved instructions are used.
+        if "instructions" in body:
+            self.put_init_instructions({"instructions": body["instructions"]})
         ok, info = claude_runner.preflight(self.claude_bin)
         if not ok and not body.get("force"):
             return 503, {"error": f"Claude Code CLI not available ({info}); "
@@ -284,6 +313,7 @@ class Api:
         from .jobs import Job  # local import to avoid cycle at module load
         assert isinstance(job, Job)
         cfg = self._config()
+        extra = self._read_instructions()
         job.set_status("running")
         try:
             # 1. analyze (mechanical)
@@ -291,11 +321,14 @@ class Api:
             res = self.analyze({})[1]
             job.append_progress(
                 f"      files={res['files']} lines={res['lines']}")
+            if extra.strip():
+                job.append_progress("      (applying saved init instructions)")
 
             # 2. area tree (Claude, with retry on transient errors)
             job.append_progress("[2/6] generate area tree with Claude")
             prompt = area_tree_prompt(
-                self.repo_root, cfg.content_lang, cfg.project_name)
+                self.repo_root, cfg.content_lang, cfg.project_name,
+                extra_instructions=extra)
             ok, err = claude_runner.stream_claude_with_retry(
                 job, prompt, self.repo_root,
                 claude_bin=self.claude_bin, spawn=self.spawn)
@@ -319,7 +352,8 @@ class Api:
                 job.append_progress(f"      ({i}/{len(areas)}) {area_id}")
                 try:
                     card_prompt = area_card_prompt(
-                        self.repo_root, cfg.content_lang, area_id)
+                        self.repo_root, cfg.content_lang, area_id,
+                        extra_instructions=extra)
                 except (FileNotFoundError, KeyError) as exc:
                     failed.append(area_id)
                     job.append_progress(f"      ! skipped {area_id}: {exc}")

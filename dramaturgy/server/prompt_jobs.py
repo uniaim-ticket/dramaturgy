@@ -17,7 +17,21 @@ from ..commands.build_area_tree_prompt import _summarize_inventory
 from ..commands.build_area_pack import build_pack
 
 
-def area_tree_prompt(repo_root: str, content_lang: str, project_name: str) -> str:
+def _instructions_block(extra_instructions: str | None) -> str:
+    """A clearly-labeled block of operator-provided guidance, appended to the
+    generation prompts. Empty when there is no guidance."""
+    text = (extra_instructions or "").strip()
+    if not text:
+        return ""
+    return (
+        "\n\n---\n\n## 追加指示 / Additional instructions (operator-provided)\n\n"
+        "以下はこのリポジトリ固有の追加指示です。必ず従ってください。\n"
+        "Follow these repository-specific instructions:\n\n"
+        + text + "\n")
+
+
+def area_tree_prompt(repo_root: str, content_lang: str, project_name: str,
+                     extra_instructions: str | None = None) -> str:
     ws = workspace_dir(repo_root)
     source_index = read_json(ws / "source-index.json")
 
@@ -32,10 +46,11 @@ def area_tree_prompt(repo_root: str, content_lang: str, project_name: str) -> st
         area_tree_path=str(ws / "area-tree.json"),
         lang=content_lang,
     )
-    return body + footer
+    return body + _instructions_block(extra_instructions) + footer
 
 
-def area_card_prompt(repo_root: str, content_lang: str, area_id: str) -> str:
+def area_card_prompt(repo_root: str, content_lang: str, area_id: str,
+                     extra_instructions: str | None = None) -> str:
     ws = workspace_dir(repo_root)
     area_tree = read_json(ws / "area-tree.json")
     area = find_area(area_tree, area_id)
@@ -66,7 +81,7 @@ def area_card_prompt(repo_root: str, content_lang: str, area_id: str) -> str:
         area_map_path=str(ws / "area-maps" / f"{area_id}.json"),
         lang=content_lang,
     )
-    return body + footer
+    return body + _instructions_block(extra_instructions) + footer
 
 
 # kind -> (template name, extra output path key)

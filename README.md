@@ -121,6 +121,11 @@ The UI is a **map preview + a review queue**. The flow is:
    its CPU/memory, so you can see the session is alive). Transient Claude API
    errors are retried; an area that still fails is skipped and reported so the
    run finishes with a partial map you can complete later.
+
+   The **Instructions** button opens a box for extra guidance to Claude during
+   generation (e.g. "tag concepts as master vs. transaction"). It is saved per
+   repository (`.dramaturgy/init-instructions.txt`, separate from the result)
+   and reused on every initialization — you don't retype it each run.
 2. **Read the preview** on the left. It shows, in order:
    - **Actors**, grouped into *business actors (people)* and *systems treated
      as actors* (payment providers, external systems, terminals).

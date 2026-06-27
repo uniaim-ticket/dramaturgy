@@ -101,3 +101,9 @@ button:disabled { opacity: .5; cursor: default; }
 .tagchip.filter.active { background: #5b3aa6; color: #fff; }
 #tag-input { width: 100%; font-size: 13px; padding: 6px 8px; margin: 4px 0;
   border: 1px solid #c4ccd4; border-radius: 6px; }
+
+/* Init additional-instructions bar */
+#init-instr-bar { padding: 10px 18px; background: #fff7ec; border-bottom: 1px solid #e3c9a3; }
+#init-instr-bar label { display: block; color: #5a6573; margin-bottom: 4px; }
+#init-instr { width: 100%; font-size: 13px; padding: 6px 8px;
+  border: 1px solid #c4ccd4; border-radius: 6px; }

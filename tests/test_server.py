@@ -78,6 +78,29 @@ def _fake_spawn_for(ws: Path, area_id: str):
     return spawn
 
 
+class InitInstructionsTests(unittest.TestCase):
+    def test_persist_and_inject_into_prompts(self):
+        from dramaturgy.server.prompt_jobs import area_tree_prompt
+        with tempfile.TemporaryDirectory() as d:
+            _sample_repo(Path(d))
+            api = Api(d)
+            api.analyze({})
+            self.assertEqual(api.get_init_instructions()[1]["instructions"], "")
+            api.put_init_instructions(
+                {"instructions": "マスタ・トランザクションの区分をタグ付けして"})
+            # Survives a fresh Api instance (same repo) → reused.
+            api2 = Api(d)
+            text = api2.get_init_instructions()[1]["instructions"]
+            self.assertIn("マスタ・トランザクション", text)
+            # Injected into the generation prompt as a labeled block.
+            prompt = area_tree_prompt(d, "ja", "S",
+                                      extra_instructions=text)
+            self.assertIn("追加指示", prompt)
+            self.assertIn("マスタ・トランザクション", prompt)
+            # No block when empty.
+            self.assertNotIn("追加指示", area_tree_prompt(d, "ja", "S", ""))
+
+
 class ApiTests(unittest.TestCase):
     def test_analyze_and_writeback(self):
         with tempfile.TemporaryDirectory() as d:

@@ -55,7 +55,9 @@ Actors vs. components (important):
 Overview business flow (important):
 - Give the area one **overview-level business flow that someone who has never
   used the system can follow**. Omit detailed branches/exceptions; show only
-  the main path in ~5–9 steps.
+  the main path. Aim for roughly 5–9 steps as a guideline, but exceed it when
+  the flow genuinely needs more — prioritize "the whole flow is followable"
+  over brevity.
 - Use a **swimlane** shape: `lanes` is the ordered list of involved actors
   (vertical lanes, by actor_id); each `steps` entry is
   `{lane: <actor_id>, label: "short action"}`, in the order things happen.

@@ -4,7 +4,7 @@
   "nav.concepts": "概念データ",
   "nav.crud": "CRUD",
   "nav.actors": "登場人物",
-  "nav.classifications": "区分（取りうる値）",
+  "nav.classifications": "データの区分値",
   "nav.components": "構成（システム）",
   "nav.dev": "開発者向け参照",
   "nav.validation": "検証結果",

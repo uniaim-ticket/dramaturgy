@@ -4,7 +4,7 @@
   "nav.concepts": "Concept data",
   "nav.crud": "CRUD",
   "nav.actors": "Actors",
-  "nav.classifications": "Classifications (value sets)",
+  "nav.classifications": "Data value sets",
   "nav.components": "Components (systems)",
   "nav.dev": "Developer reference",
   "nav.validation": "Validation",

@@ -442,7 +442,9 @@ class ReviewTests(unittest.TestCase):
             api = self._api_with_map(d)
             # actors first in the target listing.
             targets = api.list_review_targets()[1]
-            self.assertEqual(list(targets.keys()), ["actors", "concepts", "areas"])
+            self.assertEqual(list(targets.keys()),
+                             ["actors", "concepts", "classifications",
+                              "areas", "components"])
             self.assertEqual(400, api.create_finding({"target_type": "bad"})[0])
             st, f = api.create_finding({
                 "target_type": "actor", "target_id": "user",

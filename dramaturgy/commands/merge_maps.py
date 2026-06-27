@@ -80,6 +80,8 @@ def merge(maps: list[dict], ui) -> tuple[dict, list]:
     concepts: dict[str, dict] = {}
     actors: dict[str, dict] = {}
     flows: dict[str, dict] = {}
+    classifications: dict[str, dict] = {}
+    components: dict[str, dict] = {}
     system = {}
 
     for m in maps:
@@ -87,6 +89,11 @@ def merge(maps: list[dict], ui) -> tuple[dict, list]:
         _merge_by_id(areas, m.get("areas", []), "area", problems)
         _merge_by_id(concepts, m.get("concepts", []), "concept", problems)
         _merge_by_id(flows, m.get("flows", []), "flow", problems)
+        # Classifications (enumerations / code values) and components
+        # (infrastructure / structural systems) are merged by id like concepts.
+        _merge_by_id(classifications, m.get("classifications", []),
+                     "classification", problems)
+        _merge_by_id(components, m.get("components", []), "component", problems)
         # Actors may legitimately recur; merge their action lists.
         for a in m.get("actors", []):
             ident = a.get("id")
@@ -136,6 +143,8 @@ def merge(maps: list[dict], ui) -> tuple[dict, list]:
         "actors": list(actors.values()),
         "areas": list(areas.values()),
         "concepts": list(concepts.values()),
+        "classifications": list(classifications.values()),
+        "components": list(components.values()),
         "flows": list(flows.values()),
         "validations": [],
         "merge_report": {

@@ -561,6 +561,7 @@ HTMLに必要なビュー:
       "id": "",
       "name": "",
       "description": "",
+      "category": "person|system",
       "actions": [
         {
           "area_id": "",
@@ -615,6 +616,27 @@ HTMLに必要なビュー:
       "confidence": "high|medium|low"
     }
   ],
+  "classifications": [
+    {
+      "id": "",
+      "name": "",
+      "description": "",
+      "concept_id": null,
+      "values": [ { "code": "", "label": "" } ],
+      "code_refs": [],
+      "confidence": "high|medium|low"
+    }
+  ],
+  "components": [
+    {
+      "id": "",
+      "name": "",
+      "description": "",
+      "kind": "infrastructure|middleware|external",
+      "code_refs": [],
+      "confidence": "high|medium|low"
+    }
+  ],
   "flows": [
     {
       "id": "",
@@ -655,6 +677,25 @@ HTMLに必要なビュー:
   ② 人間が UI で直接編集（Claude不要の軽量操作として `PATCH /api/concept/<id>` で
   `meaning-map.json` に書き戻す）。
 * HTMLでは概念データ表にタグ列を設け、タグでの絞り込みを可能にする。
+
+### 区分（classifications）と概念データの区別
+
+* 「ポイント付与方法」「メール種別」「取消コード」のような**取りうる値の集合**は、概念データ
+  （エンティティ）ではなく**区分**として `classifications[]` に切り出す。概念データに全値を
+  並べると膨大になるため。
+* 各区分は `values: [{code, label}]` を持つ。`concept_id` があれば「その概念を展開した詳細」、
+  null なら「業務ロジックの前提となる単独の区分」として扱う。
+* HTMLでは区分を独立セクションに表示し、概念ごと／前提区分に分けて見せる。
+
+### 登場人物（actors）と構成（components）の区別
+
+* actors には `category` を付ける。`person`=業務上の登場人物（厳密には人でなくても業務フロー上
+  アクター扱いが自然なものを含む）、`system`=アクター扱いする外部システム・端末（決済代行・
+  外部会員システム・入場ゲート端末など）。
+* ロードバランサ・監視基盤・横断ミドルウェアのような**業務上の登場人物ではない構成要素**は
+  actors に入れず `components[]` に分離する。
+* HTMLでは actors を category でグループ表示し、components は別セクションにする。
+* これらはレビュー対象でもある（`target_type` に classification / component を追加）。
 
 ## Claude用プロンプト
 

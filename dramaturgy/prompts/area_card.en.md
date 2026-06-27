@@ -32,6 +32,26 @@ Concept data (important):
 Tag vocabulary (system-specific):
 {tag_vocabulary}
 
+Classifications (important):
+- Sets of allowed values like "point-grant method", "mail kind", "cancel
+  code" are NOT concept data — putting them in `concepts` bloats it. Put them
+  in **classifications** instead.
+- If a classification is a detail of a concept (an attribute's value set),
+  link it via `concept_id`. If it is a standalone premise of business logic,
+  set `concept_id` to null.
+- List representative `values: [{code, label}]` (need not be exhaustive).
+
+Actors vs. components (important):
+- Give each actor a **category**:
+  - `person`: a business actor (visitor, operator, shop staff …; include
+    things that aren't strictly people but are natural to treat as actors in
+    the business flow);
+  - `system`: an external system/terminal treated as an actor in the flow
+    (payment provider, external member system, gate terminal, vending
+    machine …).
+- Structural pieces that are NOT business actors — load balancers, monitoring,
+  cross-cutting middleware — go in **components**, not actors.
+
 Output area-map JSON shape (for this area):
 
 ```json
@@ -55,7 +75,18 @@ Output area-map JSON shape (for this area):
     "tags": ["<system-specific tag>"],
     "states": [""], "code_refs": [""], "confidence": "high|medium|low"
   }],
-  "actors": [{"id": "", "name": "", "description": "", "actions": [{"area_id": "", "action": "", "description": ""}]}],
+  "classifications": [{
+    "id": "<classification_id>", "name": "", "description": "",
+    "concept_id": "<related concept id, or null>",
+    "values": [{"code": "", "label": ""}],
+    "code_refs": [""], "confidence": "high|medium|low"
+  }],
+  "actors": [{"id": "", "name": "", "description": "", "category": "person|system",
+    "actions": [{"area_id": "", "action": "", "description": ""}]}],
+  "components": [{
+    "id": "", "name": "", "description": "", "kind": "infrastructure|middleware|external",
+    "code_refs": [""], "confidence": "high|medium|low"
+  }],
   "flows": []
 }
 ```

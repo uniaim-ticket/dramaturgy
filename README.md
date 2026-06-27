@@ -121,14 +121,21 @@ The UI is a **map preview + a review queue**. The flow is:
    its CPU/memory, so you can see the session is alive). Transient Claude API
    errors are retried; an area that still fails is skipped and reported so the
    run finishes with a partial map you can complete later.
-2. **Read the preview** on the left. It shows actors (first), **concept data**
-   (physical tables grouped by business meaning) with the areas that use them,
-   business areas as clickable boxes, and **CRUD** viewable both *by area* and
-   *by concept*. Concepts carry **system-specific tags** (e.g. master vs.
-   transaction) — filter concepts by tag, and edit a concept's tags directly
-   (the **+** on its tags cell; no Claude needed). The tag vocabulary is
-   per-project, kept in `.dramaturgy/tags.json`, and is offered to Claude when
-   generating cards.
+2. **Read the preview** on the left. It shows, in order:
+   - **Actors**, grouped into *business actors (people)* and *systems treated
+     as actors* (payment providers, external systems, terminals).
+   - **Concept data** (physical tables grouped by business meaning) with the
+     areas that use them. Concepts carry **system-specific tags** (e.g. master
+     vs. transaction) — filter by tag, and edit tags directly (the **+** on the
+     tags cell; no Claude). The tag vocabulary is per-project
+     (`.dramaturgy/tags.json`) and is offered to Claude when generating cards.
+   - **Classifications** — sets of allowed values (e.g. point-grant method,
+     mail kind), kept *out* of concept data. Each is either a detail of a
+     concept or a standalone business-rule premise.
+   - **Areas** as clickable boxes, and **CRUD** viewable *by area* and
+     *by concept*.
+   - **Components** — structural systems that are not business actors (load
+     balancers, monitoring, cross-cutting middleware).
 3. **Add findings inline**: click the **+** on any actor, concept, or area (or
    a specific field/row) to open a small popover, pick a kind, and write a
    remark. Each finding (a remark) has one of three kinds, processed

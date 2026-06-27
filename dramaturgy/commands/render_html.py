@@ -70,6 +70,10 @@ details.box .body { padding: 0 16px 16px; border-top: 1px solid #eef1f4; }
 td { overflow-wrap: anywhere; }
 .tag.area { background: #e5eefc; }
 .tag.tagchip { background: #efe7fb; color: #5b3aa6; }
+.tag.val { background: #eef3f7; }
+h3.grp { margin: 18px 0 8px; font-size: 14px; color: #41506a;
+  border-bottom: 1px solid #e7ebf0; padding-bottom: 4px; }
+h3.grp a { color: #2563eb; text-decoration: none; }
 .tag-filter { display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
   margin: 8px 0 14px; }
 .tagchip.filter { cursor: pointer; border: 1px solid transparent; }
@@ -350,29 +354,117 @@ def render_crud(cat: Catalog, areas: list, concepts: list) -> str:
         f'<div id="crud-by-concept">{by_concept}</div>')
 
 
+def _actor_card(cat: Catalog, a: dict) -> str:
+    aid, aname = a.get("id"), a.get("name")
+
+    def acpin(field, label):
+        return pin("actor", aid, aname, field, label)
+
+    actions = ""
+    for i, act in enumerate(a.get("actions", [])):
+        label = act.get("action") or f"action {i + 1}"
+        actions += (
+            f"<li>{e(act.get('action'))} "
+            f"<span class='muted'>({e(act.get('area_id'))})</span> "
+            f"— {e(act.get('description'))}"
+            f"{acpin('action:' + str(i), label)}</li>")
+    return (
+        f'<div class="box" id="actor-{e(aid)}" style="padding:14px;margin-bottom:12px">'
+        f'<h3 style="margin:0 0 6px">{e(aname)}{acpin("", aname)}</h3>'
+        f'<p class="brk">{e(a.get("description"))}'
+        f'{acpin("description", cat.t("label.actors"))}</p>'
+        f'<ul>{actions}</ul></div>')
+
+
 def render_actors(cat: Catalog, actors: list) -> str:
-    cards = []
-    for a in actors:
-        aid, aname = a.get("id"), a.get("name")
+    """Actors grouped by category: business people first, then systems that
+    are treated as actors. Pure infrastructure is NOT here (see components)."""
+    if not actors:
+        return f'<p class="muted">{e(cat.t("empty.none"))}</p>'
+    persons = [a for a in actors if a.get("category", "person") != "system"]
+    systems = [a for a in actors if a.get("category") == "system"]
+    out = ""
+    if persons:
+        out += f'<h3 class="grp">{e(cat.t("actors.person"))}</h3>'
+        out += "".join(_actor_card(cat, a) for a in persons)
+    if systems:
+        out += f'<h3 class="grp">{e(cat.t("actors.system"))}</h3>'
+        out += "".join(_actor_card(cat, a) for a in systems)
+    return out
 
-        def acpin(field, label):
-            return pin("actor", aid, aname, field, label)
 
-        actions = ""
-        for i, act in enumerate(a.get("actions", [])):
-            label = act.get("action") or f"action {i + 1}"
-            actions += (
-                f"<li>{e(act.get('action'))} "
-                f"<span class='muted'>({e(act.get('area_id'))})</span> "
-                f"— {e(act.get('description'))}"
-                f"{acpin('action:' + str(i), label)}</li>")
-        cards.append(
-            f'<div class="box" id="actor-{e(aid)}" style="padding:14px;margin-bottom:12px">'
-            f'<h3 style="margin:0 0 6px">{e(aname)}{acpin("", aname)}</h3>'
-            f'<p class="brk">{e(a.get("description"))}'
-            f'{acpin("description", cat.t("label.actors"))}</p>'
-            f'<ul>{actions}</ul></div>')
-    return "".join(cards) or f'<p class="muted">{e(cat.t("empty.none"))}</p>'
+def render_classifications(cat: Catalog, classifications: list,
+                           concepts: dict) -> str:
+    """Enumerations / code values. Grouped by the concept they detail; those
+    with no concept_id are 'business-rule premises'."""
+    if not classifications:
+        return f'<p class="muted">{e(cat.t("empty.none"))}</p>'
+
+    def cl_card(cl: dict) -> str:
+        clid, clname = cl.get("id"), cl.get("name")
+
+        def clpin(field, label):
+            return pin("classification", clid, clname, field, label)
+
+        vals = ""
+        for v in cl.get("values", []) or []:
+            if isinstance(v, dict):
+                code, lab = v.get("code", ""), v.get("label", "")
+                vals += (f'<span class="tag val"><code>{e(code)}</code> '
+                         f'{e(lab)}</span>')
+            else:
+                vals += f'<span class="tag val">{e(v)}</span>'
+        vals = vals or f'<span class="muted">{e(cat.t("empty.none"))}</span>'
+        return (
+            f'<div class="box" id="classification-{e(clid)}" '
+            f'style="padding:12px;margin-bottom:10px">'
+            f'<b>{e(clname)}</b>{clpin("", clname)}<br>'
+            f'<span class="muted tiny brk">{e(cl.get("description"))}</span>'
+            f'<div class="vals brk" style="margin-top:6px">{vals}'
+            f'{clpin("values", cat.t("label.values"))}</div></div>')
+
+    # Group by concept_id (None → premises bucket).
+    by_concept: dict = {}
+    premises: list = []
+    for cl in classifications:
+        cid = cl.get("concept_id")
+        if cid:
+            by_concept.setdefault(cid, []).append(cl)
+        else:
+            premises.append(cl)
+
+    out = f'<p class="muted">{e(cat.t("classifications.hint"))}</p>'
+    for cid, items in by_concept.items():
+        title = _concept_name(concepts, cid)
+        out += (f'<h3 class="grp">{e(cat.t("classifications.of"))} '
+                f'<a href="#concept-{e(cid)}">{e(title)}</a></h3>')
+        out += "".join(cl_card(c) for c in items)
+    if premises:
+        out += f'<h3 class="grp">{e(cat.t("classifications.premises"))}</h3>'
+        out += "".join(cl_card(c) for c in premises)
+    return out
+
+
+def render_components(cat: Catalog, components: list) -> str:
+    """Structural / infrastructure systems (LB, monitoring, middleware) —
+    things that are not business actors."""
+    if not components:
+        return f'<p class="muted">{e(cat.t("empty.none"))}</p>'
+    rows = ""
+    for c in components:
+        cid, cname = c.get("id"), c.get("name")
+        refs = " ".join(f"<code>{e(r)}</code>" for r in c.get("code_refs", []))
+        rows += (
+            f'<tr id="component-{e(cid)}"><td class="brk"><b>{e(cname)}</b>'
+            f'{pin("component", cid, cname, "", cname)}</td>'
+            f'<td>{e(c.get("kind"))}</td>'
+            f'<td class="brk">{e(c.get("description"))}</td>'
+            f'<td class="brk">{refs or "—"}</td></tr>')
+    return (
+        f'<p class="muted">{e(cat.t("components.hint"))}</p>'
+        f"<table><tr><th>{e(cat.t('label.component'))}</th>"
+        f"<th>kind</th><th>{e(cat.t('label.concepts'))}</th>"
+        f"<th>{e(cat.t('label.code_refs'))}</th></tr>{rows}</table>")
 
 
 def render_dev(cat: Catalog, areas: list) -> str:
@@ -412,7 +504,9 @@ def render_html(mm: dict, ui_lang: str) -> str:
     # Actors first: that is the usual entry point for review.
     nav_items = [
         ("actors", "nav.actors"), ("concepts", "nav.concepts"),
+        ("classifications", "nav.classifications"),
         ("areas", "nav.areas"), ("crud", "nav.crud"),
+        ("components", "nav.components"),
         ("dev", "nav.dev"), ("validation", "nav.validation"),
     ]
     nav = "".join(f'<a href="#{anchor}">{e(cat.t(key))}</a>'
@@ -428,10 +522,14 @@ def render_html(mm: dict, ui_lang: str) -> str:
         f'{render_actors(cat, mm.get("actors", []))}</section>',
         f'<section id="concepts"><h2>{e(cat.t("nav.concepts"))}</h2>'
         f'{render_concept_tables(cat, concepts, area_map)}</section>',
+        f'<section id="classifications"><h2>{e(cat.t("nav.classifications"))}</h2>'
+        f'{render_classifications(cat, mm.get("classifications", []), concept_map)}</section>',
         f'<section id="areas"><h2>{e(cat.t("nav.areas"))}</h2>'
         f'{render_areas(cat, areas, concept_map)}</section>',
         f'<section id="crud"><h2>{e(cat.t("nav.crud"))}</h2>'
         f'{render_crud(cat, areas, concepts)}</section>',
+        f'<section id="components"><h2>{e(cat.t("nav.components"))}</h2>'
+        f'{render_components(cat, mm.get("components", []))}</section>',
         f'<section id="dev"><h2>{e(cat.t("nav.dev"))}</h2>'
         f'{render_dev(cat, areas)}</section>',
         f'<section id="validation"><h2>{e(cat.t("nav.validation"))}</h2>'

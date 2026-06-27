@@ -26,6 +26,23 @@
 タグ語彙（システム固有）:
 {tag_vocabulary}
 
+区分（classifications）について（重要）:
+- 「ポイント付与方法」「メール種別」「取消コード」のような**取りうる値の集合（区分）**は、
+  概念データ(concepts)に入れないでください。概念が膨大になります。代わりに
+  **classifications** に切り出してください。
+- ある概念を展開した詳細（その概念の属性が取る区分）なら `concept_id` でその概念に紐付けます。
+  特定の概念に属さず業務ロジックの前提となる区分なら `concept_id` は null にします。
+- 各区分には代表的な値を `values: [{code, label}]` で挙げてください（網羅でなくてよい）。
+
+登場人物（actors）と構成（components）の区別（重要）:
+- actors には **category** を付けてください。
+  - `person`: 業務上の登場人物（来場者・運用担当・店舗スタッフ等。厳密には人でなくても
+    業務フロー上アクターとして扱うのが自然なものを含む）
+  - `system`: 業務フロー上アクターとして扱う外部システム・端末（決済代行・外部会員システム・
+    入場ゲート端末・自動発券機など）
+- ロードバランサ・監視基盤・横断ミドルウェアのような**業務上の登場人物ではない構成要素**は
+  actors に入れず、**components** に入れてください。
+
 出力する area-map JSON の形（この領域ぶん）:
 
 ```json
@@ -49,7 +66,18 @@
     "tags": ["<システム固有タグ>"],
     "states": [""], "code_refs": [""], "confidence": "high|medium|low"
   }],
-  "actors": [{"id": "", "name": "", "description": "", "actions": [{"area_id": "", "action": "", "description": ""}]}],
+  "classifications": [{
+    "id": "<classification_id>", "name": "", "description": "",
+    "concept_id": "<関係する概念のid、なければ null>",
+    "values": [{"code": "", "label": ""}],
+    "code_refs": [""], "confidence": "high|medium|low"
+  }],
+  "actors": [{"id": "", "name": "", "description": "", "category": "person|system",
+    "actions": [{"area_id": "", "action": "", "description": ""}]}],
+  "components": [{
+    "id": "", "name": "", "description": "", "kind": "infrastructure|middleware|external",
+    "code_refs": [""], "confidence": "high|medium|low"
+  }],
   "flows": []
 }
 ```

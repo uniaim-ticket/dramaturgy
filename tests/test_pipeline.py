@@ -30,6 +30,18 @@ SUPPORTED = ("ja", "en")
 WORKSPACE = ".dramaturgy"
 
 
+class _NoopProc:
+    """A harmless fake Claude process for tests that auto-run findings but
+    don't care about the run's effect."""
+    @property
+    def stdout(self):
+        yield ('{"type":"result","is_error":false,"subtype":"success",'
+               '"result":"ok"}\n')
+
+    def wait(self):
+        return 0
+
+
 def _make_sample_repo(root: Path) -> None:
     (root / "app" / "models").mkdir(parents=True)
     (root / "db").mkdir()
@@ -276,6 +288,77 @@ class ConceptCrudTests(unittest.TestCase):
         # Dual CRUD toggle present, both directions rendered.
         self.assertIn("crud-by-area", html)
         self.assertIn("crud-by-concept", html)
+
+
+class ClassificationComponentTests(unittest.TestCase):
+    """Classifications (enumerations) and components (infrastructure) are
+    distinct from concept data and from business actors."""
+
+    class _UI:
+        def t(self, *a, **k):
+            return ""
+
+    def _map(self):
+        return {
+            "content_lang": "ja", "system": {"name": "S"},
+            "areas": [{"id": "sales", "name": "販売", "concepts": ["order"],
+                       "concept_crud": [], "related_area_ids": [],
+                       "child_area_ids": []}],
+            "concepts": [{"id": "order", "name": "注文", "kind": "entity",
+                          "physical_tables": ["orders"]}],
+            "actors": [
+                {"id": "visitor", "name": "来場者", "category": "person",
+                 "description": "d", "actions": []},
+                {"id": "pay", "name": "決済代行", "category": "system",
+                 "description": "GMO", "actions": []}],
+            "classifications": [
+                {"id": "point_method", "name": "ポイント方式",
+                 "description": "付与/利用", "concept_id": "order",
+                 "values": [{"code": "GIVE", "label": "付与"}]},
+                {"id": "mail_kind", "name": "メール種別",
+                 "description": "前提区分", "concept_id": None,
+                 "values": [{"code": "A", "label": "案内"}]}],
+            "components": [
+                {"id": "lb", "name": "ロードバランサ", "kind": "infrastructure",
+                 "description": "LB", "code_refs": ["infra/lb.tf"]}],
+            "flows": []}
+
+    def test_merge_keeps_classifications_and_components(self):
+        from dramaturgy.commands.merge_maps import merge
+        merged, _ = merge([self._map()], self._UI())
+        self.assertEqual(len(merged["classifications"]), 2)
+        self.assertEqual(len(merged["components"]), 1)
+
+    def test_render_separates_them(self):
+        from dramaturgy.commands.merge_maps import merge
+        from dramaturgy.commands.render_html import render_html
+        merged, _ = merge([self._map()], self._UI())
+        html = render_html(merged, "ja")
+        # Distinct sections + nav.
+        self.assertIn('id="classifications"', html)
+        self.assertIn('id="components"', html)
+        # Classification value shown; concept link + premises grouping.
+        self.assertIn("GIVE", html)
+        self.assertIn('href="#concept-order"', html)
+        # Actor grouping by category, and components carry their own pins.
+        self.assertIn('data-rv-type="classification"', html)
+        self.assertIn('data-rv-type="component"', html)
+
+    def test_classifications_reviewable(self):
+        import tempfile, json as _json
+        from dramaturgy.server.api import Api
+        with tempfile.TemporaryDirectory() as d:
+            api = Api(d)
+            # Findings auto-run; give a harmless spawn so no real claude runs.
+            api.spawn = lambda argv: _NoopProc()
+            api.put_artifact("meaning-map.json", self._map())
+            targets = api.list_review_targets()[1]
+            self.assertIn("classifications", targets)
+            self.assertIn("components", targets)
+            st, _ = api.create_finding({
+                "target_type": "classification", "target_id": "point_method",
+                "kind": "reframe", "comment": "値を増やす"})
+            self.assertEqual(st, 201)
 
 
 if __name__ == "__main__":

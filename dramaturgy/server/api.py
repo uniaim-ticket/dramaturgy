@@ -398,7 +398,9 @@ class Api:
         return 200, {
             "actors": items("actors"),
             "concepts": items("concepts"),
+            "classifications": items("classifications"),
             "areas": items("areas"),
+            "components": items("components"),
         }
 
     def list_findings(self):

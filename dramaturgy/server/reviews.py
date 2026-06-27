@@ -73,6 +73,10 @@ def create_finding(repo_root: str | Path, body: dict) -> dict:
         "target_type": body["target_type"],
         "target_id": body["target_id"],
         "target_name": body.get("target_name", ""),
+        # Optional sub-element of the target this comment is scoped to
+        # (e.g. "purpose", "crud:order", "action:2"); empty = whole item.
+        "field": body.get("field", ""),
+        "field_label": body.get("field_label", ""),
         "kind": body["kind"],
         "comment": body["comment"].strip(),
         "status": "open",

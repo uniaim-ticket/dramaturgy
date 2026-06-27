@@ -40,6 +40,8 @@ main { max-width: 1100px; margin: 0 auto; padding: 24px; }
 section { background: #fff; border: 1px solid #e2e6ea; border-radius: 8px;
   padding: 20px; margin-bottom: 24px; }
 section > h2 { margin-top: 0; border-bottom: 2px solid #eef1f4; padding-bottom: 8px; }
+/* Anchored items must clear the sticky nav when scrolled to. */
+section, details.box, .box[id], [id^="actor-"] { scroll-margin-top: 52px; }
 
 /* Area boxes: grid of clickable cards that expand in place. */
 .box-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
@@ -60,7 +62,12 @@ details.box .body { padding: 0 16px 16px; border-top: 1px solid #eef1f4; }
 .kv dt { color: #5a6573; font-weight: 600; }
 .kv dd { margin: 0; }
 .tag { display: inline-block; background: #eef1f4; border-radius: 4px;
-  padding: 1px 8px; margin: 2px; font-size: 12px; }
+  padding: 1px 8px; margin: 2px; font-size: 12px;
+  max-width: 100%; overflow-wrap: anywhere; word-break: break-word;
+  white-space: normal; vertical-align: top; }
+/* Long unbroken tokens (states, table names) must wrap, not overflow. */
+.brk { overflow-wrap: anywhere; word-break: break-word; }
+td { overflow-wrap: anywhere; }
 .tag.area { background: #e5eefc; }
 .tag.concept { background: #e9f5ea; }
 .tag.phys { background: #f3eee2; font-family: ui-monospace, monospace; }
@@ -113,18 +120,27 @@ def conf_badge(cat: Catalog, level: str) -> str:
     return f'<span class="conf-{e(level)}">{e(cat.t(f"confidence.{level}"))}</span>'
 
 
-def pin(target_type: str, target_id: str, target_name: str) -> str:
+def pin(target_type: str, target_id: str, target_name: str,
+        field: str = "", field_label: str = "") -> str:
     """A small inline button to attach a review finding to an item.
 
     Clicking it postMessages the parent app (the dramaturgy UI), which opens
     the inline finding popover. Harmless (no-op) when the HTML is opened
     standalone outside the app.
+
+    ``field`` pins a comment to a specific element/row within the item (e.g.
+    "purpose", "crud:order", an actor action). ``field_label`` is the
+    human-readable thing being commented on. Both are optional; without them
+    the pin targets the whole item.
     """
-    return (
-        f'<button class="rv-pin" title="review"'
-        f' data-rv-type="{e(target_type)}"'
-        f' data-rv-id="{e(target_id)}"'
-        f' data-rv-name="{e(target_name)}">+</button>')
+    attrs = (f' data-rv-type="{e(target_type)}"'
+             f' data-rv-id="{e(target_id)}"'
+             f' data-rv-name="{e(target_name)}"')
+    if field:
+        attrs += f' data-rv-field="{e(field)}"'
+    if field_label:
+        attrs += f' data-rv-field-label="{e(field_label)}"'
+    return f'<button class="rv-pin" title="review"{attrs}>+</button>'
 
 
 def crud_cells(ops) -> str:
@@ -153,53 +169,65 @@ def _area_name(areas: dict, aid: str) -> str:
 
 
 def render_area_box(cat: Catalog, area: dict, concepts: dict) -> str:
+    aid, aname = area.get("id"), area.get("name")
+
+    def apin(field, label):
+        return pin("area", aid, aname, field, label)
+
     # The concepts this area touches, with its CRUD ops (area-side view).
+    # Each row is individually commentable.
     crud_rows = ""
     for entry in area.get("concept_crud", []) or []:
         cid = entry.get("concept_id")
-        crud_rows += (f"<tr><td>{e(_concept_name(concepts, cid))}</td>"
+        cname = _concept_name(concepts, cid)
+        crud_rows += (f"<tr><td>{e(cname)}"
+                      f"{apin('crud:' + str(cid), 'CRUD / ' + cname)}</td>"
                       f"<td>{crud_cells(entry.get('ops', ''))}</td></tr>")
     crud_block = (f'<table><tr><th>{e(cat.t("label.concepts"))}</th>'
                   f'<th>CRUD</th></tr>{crud_rows}</table>'
                   if crud_rows else f'<span class="muted">{e(cat.t("empty.none"))}</span>')
 
+    # Each actor's involvement is individually commentable.
     actor_lines = ""
     for a in area.get("actors", []) or []:
+        actor_id = a.get("actor_id")
         acts = a.get("actions", [])
         acts = ", ".join(acts) if isinstance(acts, list) else str(acts)
-        actor_lines += f"<li><b>{e(a.get('actor_id'))}</b>: {e(acts)}</li>"
+        actor_lines += (f"<li><b>{e(actor_id)}</b>: {e(acts)}"
+                        f"{apin('actor:' + str(actor_id), str(actor_id))}</li>")
     flows = ""
     for f in area.get("flows", []) or []:
-        if isinstance(f, dict):
-            flows += f"<li>{e(f.get('name'))}</li>"
-        else:
-            flows += f"<li>{e(f)}</li>"
+        name = f.get("name") if isinstance(f, dict) else f
+        flows += f"<li>{e(name)}{apin('flow:' + str(name), str(name))}</li>"
 
+    # (field key, label, rendered value) — every field gets its own pin.
     rows = [
-        (cat.t("label.purpose"), e(area.get("purpose")) or "—"),
-        (cat.t("label.parent"), e(area.get("parent_area_id")) or "—"),
-        (cat.t("label.children"), tags(area.get("child_area_ids"), "area")),
-        (cat.t("label.related"), tags(area.get("related_area_ids"), "area")),
-        (cat.t("label.actors"), f"<ul>{actor_lines}</ul>" if actor_lines else "—"),
-        (cat.t("label.crud"), crud_block),
-        (cat.t("label.flows"), f"<ul>{flows}</ul>" if flows else "—"),
-        (cat.t("label.apis"), tags(area.get("apis"))),
-        (cat.t("label.screens"), tags(area.get("screens"))),
-        (cat.t("label.code_refs"),
+        ("purpose", cat.t("label.purpose"), e(area.get("purpose")) or "—"),
+        ("parent", cat.t("label.parent"), e(area.get("parent_area_id")) or "—"),
+        ("children", cat.t("label.children"), tags(area.get("child_area_ids"), "area")),
+        ("related", cat.t("label.related"), tags(area.get("related_area_ids"), "area")),
+        ("actors", cat.t("label.actors"), f"<ul>{actor_lines}</ul>" if actor_lines else "—"),
+        ("crud", cat.t("label.crud"), crud_block),
+        ("flows", cat.t("label.flows"), f"<ul>{flows}</ul>" if flows else "—"),
+        ("apis", cat.t("label.apis"), tags(area.get("apis"))),
+        ("screens", cat.t("label.screens"), tags(area.get("screens"))),
+        ("code_refs", cat.t("label.code_refs"),
          " ".join(f"<code>{e(r)}</code>" for r in area.get("code_refs", [])) or "—"),
-        (cat.t("label.risk_points"), tags(area.get("risk_points"))),
-        (cat.t("label.open_questions"), tags(area.get("open_questions"))),
-        (cat.t("label.confidence"), conf_badge(cat, area.get("confidence"))),
+        ("risk_points", cat.t("label.risk_points"), tags(area.get("risk_points"))),
+        ("open_questions", cat.t("label.open_questions"), tags(area.get("open_questions"))),
+        ("confidence", cat.t("label.confidence"), conf_badge(cat, area.get("confidence"))),
     ]
-    kv = "".join(f"<dt>{k}</dt><dd>{v}</dd>" for k, v in rows)
+    kv = "".join(
+        f"<dt>{k}{apin(fkey, k)}</dt><dd>{v}</dd>" for fkey, k, v in rows)
     low = (f'<div class="low-note">{e(cat.t("note.low_confidence"))}</div>'
            if area.get("confidence") == "low" else "")
     return (
-        f'<details class="box" id="area-{e(area.get("id"))}">'
-        f'<summary><span class="sum-name">{e(area.get("name"))}'
-        f'{pin("area", area.get("id"), area.get("name"))}</span>'
-        f'<span class="sum-id">{e(area.get("id"))}</span></summary>'
-        f'<div class="body"><p>{e(area.get("one_liner"))}</p>'
+        f'<details class="box" id="area-{e(aid)}">'
+        f'<summary><span class="sum-name">{e(aname)}'
+        f'{apin("", aname)}</span>'
+        f'<span class="sum-id">{e(aid)}</span></summary>'
+        f'<div class="body"><p>{e(area.get("one_liner"))}'
+        f'{apin("one_liner", cat.t("label.one_liner"))}</p>'
         f'<dl class="kv">{kv}</dl>{low}</div></details>')
 
 
@@ -216,14 +244,21 @@ def render_concept_tables(cat: Catalog, concepts: list, areas: dict) -> str:
         return f'<p class="muted">{e(cat.t("empty.none"))}</p>'
     rows = ""
     for c in concepts:
+        cid, cname = c.get("id"), c.get("name")
+
+        def cpin(field, label):
+            return pin("concept", cid, cname, field, label)
+
         area_links = [_area_name(areas, aid) for aid in c.get("related_areas", [])]
         rows += (
-            f"<tr><td><b>{e(c.get('name'))}</b>"
-            f"{pin('concept', c.get('id'), c.get('name'))}<br>"
-            f"<span class='muted'>{e(c.get('description'))}</span></td>"
-            f"<td>{tags(c.get('physical_tables'), 'phys')}</td>"
-            f"<td>{tags(area_links, 'area')}</td>"
-            f"<td>{tags(c.get('states'))}</td></tr>")
+            f'<tr><td class="brk"><b>{e(cname)}</b>{cpin("", cname)}<br>'
+            f"<span class='muted'>{e(c.get('description'))}"
+            f"{cpin('description', cat.t('label.concepts'))}</span></td>"
+            f'<td class="brk">{tags(c.get("physical_tables"), "phys")}'
+            f"{cpin('physical_tables', cat.t('label.physical_tables'))}</td>"
+            f'<td>{tags(area_links, "area")}</td>'
+            f'<td class="brk">{tags(c.get("states"))}'
+            f"{cpin('states', cat.t('label.states'))}</td></tr>")
     return (
         f'<p class="muted">{e(cat.t("concepts.hint"))}</p>'
         f"<table><tr><th>{e(cat.t('label.concept_table'))}</th>"
@@ -280,16 +315,25 @@ def render_crud(cat: Catalog, areas: list, concepts: list) -> str:
 def render_actors(cat: Catalog, actors: list) -> str:
     cards = []
     for a in actors:
-        actions = "".join(
-            f"<li>{e(act.get('action'))} "
-            f"<span class='muted'>({e(act.get('area_id'))})</span> "
-            f"— {e(act.get('description'))}</li>"
-            for act in a.get("actions", []))
+        aid, aname = a.get("id"), a.get("name")
+
+        def acpin(field, label):
+            return pin("actor", aid, aname, field, label)
+
+        actions = ""
+        for i, act in enumerate(a.get("actions", [])):
+            label = act.get("action") or f"action {i + 1}"
+            actions += (
+                f"<li>{e(act.get('action'))} "
+                f"<span class='muted'>({e(act.get('area_id'))})</span> "
+                f"— {e(act.get('description'))}"
+                f"{acpin('action:' + str(i), label)}</li>")
         cards.append(
-            f'<div class="box" style="padding:14px;margin-bottom:12px">'
-            f'<h3 style="margin:0 0 6px">{e(a.get("name"))}'
-            f'{pin("actor", a.get("id"), a.get("name"))}</h3>'
-            f'<p>{e(a.get("description"))}</p><ul>{actions}</ul></div>')
+            f'<div class="box" id="actor-{e(aid)}" style="padding:14px;margin-bottom:12px">'
+            f'<h3 style="margin:0 0 6px">{e(aname)}{acpin("", aname)}</h3>'
+            f'<p class="brk">{e(a.get("description"))}'
+            f'{acpin("description", cat.t("label.actors"))}</p>'
+            f'<ul>{actions}</ul></div>')
     return "".join(cards) or f'<p class="muted">{e(cat.t("empty.none"))}</p>'
 
 
@@ -379,7 +423,8 @@ document.addEventListener('click', function (ev) {{
   if (!b) return;
   ev.preventDefault();
   var msg = {{ source: 'dramaturgy-review', target_type: b.dataset.rvType,
-    target_id: b.dataset.rvId, target_name: b.dataset.rvName }};
+    target_id: b.dataset.rvId, target_name: b.dataset.rvName,
+    field: b.dataset.rvField || '', field_label: b.dataset.rvFieldLabel || '' }};
   if (window.parent && window.parent !== window) window.parent.postMessage(msg, '*');
 }});
 </script>

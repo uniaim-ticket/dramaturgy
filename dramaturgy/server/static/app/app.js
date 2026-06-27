@@ -10,6 +10,7 @@ const I18N = {
     "job.running": "実行中…", "job.done": "完了", "job.error": "エラー", "job.idle": "応答待ち",
     "viewer.title": "意味地図プレビュー", "viewer.refresh": "更新",
     "viewer.pin_hint": "各項目の + をクリックして指摘を追加します。",
+    "viewer.hide_queue": "キューを隠す", "viewer.show_queue": "キューを表示",
     "rv.queue": "指摘キュー",
     "rv.kind.reframe": "再整理", "rv.kind.audit": "検査", "rv.kind.proposal": "将来提案",
     "rv.kindhelp.reframe": "指摘を是として、正本の意味地図を修正します。",
@@ -30,6 +31,7 @@ const I18N = {
     "job.running": "running…", "job.done": "done", "job.error": "error", "job.idle": "awaiting response",
     "viewer.title": "Meaning map preview", "viewer.refresh": "Refresh",
     "viewer.pin_hint": "Click + on any item to add a finding.",
+    "viewer.hide_queue": "Hide queue", "viewer.show_queue": "Show queue",
     "rv.queue": "Finding queue",
     "rv.kind.reframe": "reframe", "rv.kind.audit": "audit", "rv.kind.proposal": "proposal",
     "rv.kindhelp.reframe": "Accept the remark and edit the canonical meaning map.",
@@ -189,8 +191,9 @@ function updateKindHelp() {
 
 function openPopover(target) {
   POP_TARGET = target;
+  const base = `${target.target_name || target.target_id} (${target.target_type})`;
   document.getElementById("pop-target").textContent =
-    `${target.target_name || target.target_id} (${target.target_type})`;
+    target.field_label ? `${base} › ${target.field_label}` : base;
   document.getElementById("rv-comment").value = "";
   updateKindHelp();
   const pop = document.getElementById("rv-pop");
@@ -211,6 +214,7 @@ async function submitFinding(thenRun) {
   });
   if (status !== 201) { alert(data.error || "error"); return; }
   closePopover();
+  setQueueVisible(true);   // make sure the new finding is visible
   await loadFindings();
   if (thenRun) runFinding(data.id);
 }
@@ -235,10 +239,12 @@ function findingCard(f) {
   const card = document.createElement("div");
   card.className = "rv-card";
   const ran = f.status === "done" || f.status === "error";
+  const scope = f.field_label
+    ? ` <span class="muted tiny">› ${escapeHtml(f.field_label)}</span>` : "";
   card.innerHTML =
     `<div class="rv-head">
        <span class="badge ${KIND_CLASS[f.kind] || ""}">${escapeHtml(t("rv.kind." + f.kind))}</span>
-       <b>${escapeHtml(f.target_name || f.target_id)}</b>
+       <b>${escapeHtml(f.target_name || f.target_id)}</b>${scope}
        <span class="muted tiny">${escapeHtml(f.status)}</span>
      </div>
      <div class="rv-comment">${escapeHtml(f.comment)}</div>`;
@@ -314,6 +320,15 @@ function refreshView() {
   frame.src = apiUrl("/api/view") + "?_=" + Date.now();
 }
 
+function setQueueVisible(visible) {
+  document.getElementById("queue").hidden = !visible;
+  document.getElementById("toggle-queue").textContent =
+    visible ? t("viewer.hide_queue") : t("viewer.show_queue");
+}
+function toggleQueue() {
+  setQueueVisible(document.getElementById("queue").hidden);
+}
+
 // ---- config ------------------------------------------------------------
 async function saveConfig() {
   const body = {
@@ -330,6 +345,7 @@ async function saveConfig() {
 function init() {
   document.getElementById("run-init").onclick = runInit;
   document.getElementById("refresh-view").onclick = refreshView;
+  document.getElementById("toggle-queue").onclick = toggleQueue;
   document.getElementById("save-config").onclick = saveConfig;
   document.getElementById("rv-run-all").onclick = runAllQueued;
   document.getElementById("rv-add").onclick = () => submitFinding(false);
@@ -344,7 +360,8 @@ function init() {
     const d = ev.data;
     if (d && d.source === "dramaturgy-review") {
       openPopover({ target_type: d.target_type, target_id: d.target_id,
-        target_name: d.target_name });
+        target_name: d.target_name, field: d.field || "",
+        field_label: d.field_label || "" });
     }
   });
 

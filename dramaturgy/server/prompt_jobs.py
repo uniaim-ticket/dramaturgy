@@ -75,10 +75,20 @@ def review_prompt(repo_root: str, content_lang: str, finding: dict) -> tuple[str
     ws = workspace_dir(repo_root)
     name = _REVIEW_TEMPLATES[finding["kind"]]
     map_path = str(ws / "meaning-map.json")
+    # Scope the comment to a sub-element when the finding has a field, so
+    # Claude knows exactly what is being commented on (e.g. the purpose, a
+    # specific concept's CRUD, one actor action).
+    field = finding.get("field") or ""
+    target_id = finding["target_id"]
+    target_name = finding.get("target_name", "")
+    if field:
+        target_id = f"{target_id} › {field}"
+        flabel = finding.get("field_label") or field
+        target_name = f"{target_name} › {flabel}" if target_name else flabel
     slots = {
         "target_type": finding["target_type"],
-        "target_id": finding["target_id"],
-        "target_name": finding.get("target_name", ""),
+        "target_id": target_id,
+        "target_name": target_name,
         "comment": finding["comment"],
         "map_path": map_path,
     }

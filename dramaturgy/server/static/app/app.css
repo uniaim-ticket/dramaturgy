@@ -70,9 +70,10 @@ button:disabled { opacity: .5; cursor: default; }
 
 /* Inline finding popover */
 .pop {
-  position: fixed; top: 80px; right: 400px; width: 340px; z-index: 50;
+  position: fixed; top: 96px; left: 50%; transform: translateX(-50%);
+  width: 380px; max-width: 92vw; z-index: 60;
   background: #fff; border: 1px solid #9db4cc; border-radius: 10px;
-  box-shadow: 0 8px 28px rgba(0,0,0,.18); padding: 12px 14px;
+  box-shadow: 0 8px 28px rgba(0,0,0,.22); padding: 12px 14px;
 }
 .pop-head { display: flex; align-items: center; justify-content: space-between; }
 .pop-head .x { border: 0; background: transparent; font-size: 18px; cursor: pointer; }

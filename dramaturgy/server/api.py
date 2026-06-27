@@ -23,6 +23,7 @@ from ..commands.validate_map import Report, validate as run_validate
 from ..common.i18n import Catalog
 from . import claude_runner
 from . import reviews
+from . import tags
 from .jobs import JobRegistry
 from .prompt_jobs import area_card_prompt, area_tree_prompt, review_prompt
 
@@ -122,6 +123,37 @@ class Api:
                 write_json(self.ws / "meaning-map.json", mm)
                 return 200, areas[i]
         return 404, {"error": f"area '{area_id}' not found"}
+
+    def patch_concept(self, concept_id: str, body: dict):
+        """Update a single concept (e.g. its tags) in meaning-map.json.
+
+        ``tags`` is normalized to a deduped list of non-empty strings.
+        """
+        mm = self._read_optional("meaning-map.json")
+        if mm is None:
+            return 404, {"error": "meaning-map.json not found"}
+        if "tags" in body:
+            seen, norm = set(), []
+            for tg in body["tags"] or []:
+                tg = str(tg).strip()
+                if tg and tg not in seen:
+                    seen.add(tg)
+                    norm.append(tg)
+            body = {**body, "tags": norm}
+        concepts = mm.get("concepts", [])
+        for i, c in enumerate(concepts):
+            if c.get("id") == concept_id:
+                concepts[i] = {**c, **body, "id": concept_id}
+                write_json(self.ws / "meaning-map.json", mm)
+                return 200, concepts[i]
+        return 404, {"error": f"concept '{concept_id}' not found"}
+
+    # ---- tag vocabulary (system-specific) ------------------------------
+    def get_tags(self):
+        return 200, tags.load_vocab(self.repo_root)
+
+    def put_tags(self, body: dict):
+        return 200, tags.save_vocab(self.repo_root, body or {})
 
     # ---- merge / validate / render -------------------------------------
     def merge(self, body: dict | None = None):

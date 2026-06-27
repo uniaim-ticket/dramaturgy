@@ -20,6 +20,11 @@
 - 各概念には、根拠となる**物理テーブル名を physical_tables に列挙**してください。
 - この領域が各概念に対して行う操作を **concept_crud** として宣言してください
   （ops は "C"/"R"/"U"/"D" の組み合わせ。例 "CRU"）。CRUDは概念データ単位で表します。
+- 各概念に、このシステム固有の観点で **tags** を付けてください（例: マスタ/トランザクション
+  の区別など）。下記のタグ語彙があれば優先的に使い、必要なら新しいタグを足してください。
+
+タグ語彙（システム固有）:
+{tag_vocabulary}
 
 出力する area-map JSON の形（この領域ぶん）:
 
@@ -41,6 +46,7 @@
   "concepts": [{
     "id": "<concept_id>", "name": "", "description": "", "kind": "entity|state|event|value_object|external_system",
     "physical_tables": ["<物理テーブル/モデル名>"],
+    "tags": ["<システム固有タグ>"],
     "states": [""], "code_refs": [""], "confidence": "high|medium|low"
   }],
   "actors": [{"id": "", "name": "", "description": "", "actions": [{"area_id": "", "action": "", "description": ""}]}],

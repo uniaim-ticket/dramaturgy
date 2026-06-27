@@ -522,5 +522,75 @@ class ReviewTests(unittest.TestCase):
             self.assertTrue(Path(stored["proposal_ref"]).exists())
 
 
+class TagTests(unittest.TestCase):
+    def _api_with_concept(self, d):
+        api = Api(d)
+        mm = {"content_lang": "ja", "system": {"name": "S", "source_summary": {}},
+              "actors": [], "flows": [], "areas": [],
+              "concepts": [{"id": "order", "name": "注文", "kind": "entity",
+                            "physical_tables": ["orders"]}]}
+        api.put_artifact("meaning-map.json", mm)
+        return api
+
+    def test_vocab_roundtrip_dedup(self):
+        with tempfile.TemporaryDirectory() as d:
+            api = self._api_with_concept(d)
+            self.assertEqual(api.get_tags()[1], {"tags": []})
+            saved = api.put_tags({"tags": [
+                {"name": "master", "description": "マスタ"},
+                {"name": "transaction"}, "master", "  "]})[1]
+            names = [t["name"] for t in saved["tags"]]
+            self.assertEqual(names, ["master", "transaction"])
+
+    def test_patch_concept_tags_normalized_and_persisted(self):
+        with tempfile.TemporaryDirectory() as d:
+            api = self._api_with_concept(d)
+            out = api.patch_concept("order",
+                                    {"tags": ["transaction", "transaction", "  ", "新規"]})[1]
+            self.assertEqual(out["tags"], ["transaction", "新規"])
+            on_disk = api.get_artifact("meaning-map.json")[1]
+            self.assertEqual(on_disk["concepts"][0]["tags"], ["transaction", "新規"])
+
+    def test_patch_concept_missing(self):
+        with tempfile.TemporaryDirectory() as d:
+            api = self._api_with_concept(d)
+            self.assertEqual(api.patch_concept("nope", {"tags": []})[0], 404)
+
+    def test_merge_preserves_concept_tags(self):
+        from dramaturgy.commands.merge_maps import merge
+
+        class _UI:
+            def t(self, *a, **k):
+                return ""
+        m = {"content_lang": "ja", "system": {"name": "S"},
+             "areas": [{"id": "a", "name": "A", "concepts": ["order"],
+                        "concept_crud": [{"concept_id": "order", "ops": "R"}],
+                        "related_area_ids": [], "child_area_ids": []}],
+             "concepts": [{"id": "order", "name": "注文", "kind": "entity",
+                           "physical_tables": ["orders"],
+                           "tags": ["transaction"]}],
+             "actors": [], "flows": []}
+        merged, _ = merge([m], _UI())
+        order = next(c for c in merged["concepts"] if c["id"] == "order")
+        self.assertEqual(order["tags"], ["transaction"])
+        # aggregation still happened alongside tags
+        self.assertTrue(order.get("crud_by_area"))
+
+    def test_render_shows_tags_and_filter(self):
+        from dramaturgy.commands.render_html import render_html
+        mm = {"content_lang": "ja", "system": {"name": "S"},
+              "actors": [], "flows": [], "areas": [],
+              "concepts": [
+                  {"id": "order", "name": "注文", "kind": "entity",
+                   "physical_tables": ["orders"], "tags": ["transaction"]},
+                  {"id": "item", "name": "商品", "kind": "entity",
+                   "physical_tables": ["items"], "tags": ["master"]}]}
+        html = render_html(mm, "ja")
+        self.assertIn('id="concept-tag-filter"', html)
+        self.assertIn('data-tag="master"', html)
+        self.assertIn('data-tag="transaction"', html)
+        self.assertIn('data-rv-field="tags"', html)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

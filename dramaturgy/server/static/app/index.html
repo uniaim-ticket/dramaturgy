@@ -70,6 +70,21 @@
   </div>
 </div>
 
+<!-- direct tag editor (no Claude): edit a concept's tags in place -->
+<div id="tag-pop" class="pop" hidden>
+  <div class="pop-head">
+    <b id="tag-target"></b>
+    <button id="tag-close" class="x">×</button>
+  </div>
+  <p class="muted tiny" data-i="tag.help">Edit this concept's tags. Click a vocabulary tag to toggle it, or type your own (comma/space separated).</p>
+  <div id="tag-vocab" class="tag-filter"></div>
+  <input id="tag-input" type="text" placeholder="master, transaction, …">
+  <div class="row">
+    <button id="tag-save" class="primary" data-i="tag.save">Save tags</button>
+    <a href="#" id="tag-manage" class="tiny" data-i="tag.manage">manage vocabulary</a>
+  </div>
+</div>
+
 <script src="app.js"></script>
 </body>
 </html>

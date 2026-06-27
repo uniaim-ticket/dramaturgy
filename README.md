@@ -124,7 +124,11 @@ The UI is a **map preview + a review queue**. The flow is:
 2. **Read the preview** on the left. It shows actors (first), **concept data**
    (physical tables grouped by business meaning) with the areas that use them,
    business areas as clickable boxes, and **CRUD** viewable both *by area* and
-   *by concept*.
+   *by concept*. Concepts carry **system-specific tags** (e.g. master vs.
+   transaction) — filter concepts by tag, and edit a concept's tags directly
+   (the **+** on its tags cell; no Claude needed). The tag vocabulary is
+   per-project, kept in `.dramaturgy/tags.json`, and is offered to Claude when
+   generating cards.
 3. **Add findings inline**: click the **+** on any actor, concept, or area to
    open a small popover, pick a kind, write a remark, and either *Add to queue*
    or *Add & run*. Each finding (a remark) has one of three kinds, processed

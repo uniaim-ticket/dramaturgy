@@ -44,10 +44,22 @@ def area_card_prompt(repo_root: str, content_lang: str, area_id: str) -> str:
     source_index = read_json(ws / "source-index.json")
     pack = build_pack(area, source_index)
 
+    # System-specific tag vocabulary (optional) to guide concept tagging.
+    from . import tags as _tags
+    vocab = _tags.load_vocab(repo_root)["tags"]
+    if vocab:
+        vocab_text = "\n".join(
+            f"- {v['name']}" + (f": {v['description']}" if v.get("description") else "")
+            for v in vocab)
+    else:
+        vocab_text = "(none defined yet — infer system-specific tags such as "
+        vocab_text += "master vs. transaction where useful)"
+
     body = render_prompt(
         "area_card", content_lang,
         area_summary=json.dumps(pack["area"], ensure_ascii=False, indent=2),
         area_pack=json.dumps(pack, ensure_ascii=False, indent=2),
+        tag_vocabulary=vocab_text,
     )
     footer = render_prompt(
         "writeback_area_card", content_lang,

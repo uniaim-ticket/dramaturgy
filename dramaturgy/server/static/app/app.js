@@ -23,6 +23,9 @@ const I18N = {
     "rv.no_findings": "まだ指摘はありません。プレビューの + から追加します。",
     "rv.no_map": "先に「Claudeで一括初期化」で意味地図を生成してください。",
     "saved": "保存しました", "save_failed": "保存に失敗",
+    "tag.help": "この概念データのタグを編集します。語彙タグをクリックで切替、または自由入力（カンマ/空白区切り）。",
+    "tag.save": "タグを保存", "tag.manage": "語彙を管理",
+    "tag.manage_prompt": "タグ語彙を1行1タグで編集（「名前: 説明」も可）:",
   },
   en: {
     "btn.save_config": "Save",
@@ -44,6 +47,9 @@ const I18N = {
     "rv.no_findings": "No findings yet. Add one with the + in the preview.",
     "rv.no_map": "Generate the map first with “Initialize all with Claude”.",
     "saved": "Saved", "save_failed": "Save failed",
+    "tag.help": "Edit this concept's tags. Click a vocabulary tag to toggle it, or type your own (comma/space separated).",
+    "tag.save": "Save tags", "tag.manage": "manage vocabulary",
+    "tag.manage_prompt": "Edit the tag vocabulary, one tag per line (\"name: description\" allowed):",
   },
 };
 
@@ -314,6 +320,76 @@ async function runAllQueued() {
   btn.disabled = false;
 }
 
+// ---- concept tag editor (direct edit, no Claude) -----------------------
+let TAG_TARGET = null;     // concept id being edited
+let TAG_SELECTED = [];     // current tag strings
+
+async function openTagEditor(conceptId, conceptName) {
+  TAG_TARGET = conceptId;
+  document.getElementById("tag-target").textContent = `${conceptName} (concept)`;
+  // Load the concept's current tags + the system vocabulary.
+  const [{ data: mm }, { data: vocab }] = await Promise.all([
+    api("GET", "/api/artifact/meaning-map.json"),
+    api("GET", "/api/tags"),
+  ]);
+  const concept = (mm.concepts || []).find((c) => c.id === conceptId) || {};
+  TAG_SELECTED = (concept.tags || []).slice();
+  const vocabNames = (vocab.tags || []).map((t) => t.name);
+  // Vocabulary chips (toggle); show selected ones not in vocab too.
+  const names = Array.from(new Set([...vocabNames, ...TAG_SELECTED]));
+  const bar = document.getElementById("tag-vocab");
+  bar.innerHTML = "";
+  names.forEach((name) => {
+    const chip = document.createElement("span");
+    chip.className = "tag tagchip filter" + (TAG_SELECTED.includes(name) ? " active" : "");
+    chip.textContent = name;
+    chip.onclick = () => {
+      const i = TAG_SELECTED.indexOf(name);
+      if (i >= 0) TAG_SELECTED.splice(i, 1); else TAG_SELECTED.push(name);
+      chip.classList.toggle("active");
+      syncTagInput();
+    };
+    bar.appendChild(chip);
+  });
+  syncTagInput();
+  document.getElementById("tag-pop").hidden = false;
+}
+
+function syncTagInput() {
+  document.getElementById("tag-input").value = TAG_SELECTED.join(", ");
+}
+
+function closeTagEditor() {
+  document.getElementById("tag-pop").hidden = true;
+  TAG_TARGET = null;
+}
+
+async function saveTags() {
+  if (!TAG_TARGET) return;
+  const tags = document.getElementById("tag-input").value
+    .split(/[,\s]+/).map((s) => s.trim()).filter(Boolean);
+  const { status } = await api(
+    "PATCH", "/api/concept/" + encodeURIComponent(TAG_TARGET), { tags });
+  if (status === 200) { closeTagEditor(); refreshView(); }
+  else alert(t("save_failed"));
+}
+
+async function manageVocab() {
+  const { data } = await api("GET", "/api/tags");
+  const text = (data.tags || [])
+    .map((t) => (t.description ? `${t.name}: ${t.description}` : t.name)).join("\n");
+  const edited = prompt(t("tag.manage_prompt"), text);
+  if (edited === null) return;
+  const tags = edited.split("\n").map((line) => {
+    const idx = line.indexOf(":");
+    return idx >= 0
+      ? { name: line.slice(0, idx).trim(), description: line.slice(idx + 1).trim() }
+      : { name: line.trim(), description: "" };
+  }).filter((t) => t.name);
+  await api("PUT", "/api/tags", { tags });
+  if (TAG_TARGET) openTagEditor(TAG_TARGET, document.getElementById("tag-target").textContent);
+}
+
 // ---- viewer ------------------------------------------------------------
 function refreshView() {
   const frame = document.getElementById("view-frame");
@@ -356,12 +432,21 @@ function init() {
 
   // The preview iframe asks us (via postMessage) to open the popover when a
   // + pin is clicked inside it.
+  document.getElementById("tag-close").onclick = closeTagEditor;
+  document.getElementById("tag-save").onclick = saveTags;
+  document.getElementById("tag-manage").onclick = (e) => { e.preventDefault(); manageVocab(); };
+
   window.addEventListener("message", (ev) => {
     const d = ev.data;
     if (d && d.source === "dramaturgy-review") {
-      openPopover({ target_type: d.target_type, target_id: d.target_id,
-        target_name: d.target_name, field: d.field || "",
-        field_label: d.field_label || "" });
+      // Editing a concept's tags is a direct, Claude-free edit.
+      if (d.target_type === "concept" && d.field === "tags") {
+        openTagEditor(d.target_id, d.target_name);
+      } else {
+        openPopover({ target_type: d.target_type, target_id: d.target_id,
+          target_name: d.target_name, field: d.field || "",
+          field_label: d.field_label || "" });
+      }
     }
   });
 

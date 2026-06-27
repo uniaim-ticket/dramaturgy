@@ -89,3 +89,13 @@ button:disabled { opacity: .5; cursor: default; }
   border-radius: 6px; cursor: pointer; background: #fff; }
 .subtabs input { display: none; }
 .subtabs input:checked + label { background: #2563eb; color: #fff; border-color: #2563eb; }
+
+/* Tag editor popover */
+.tag-filter { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+.tag.tagchip { background: #efe7fb; color: #5b3aa6; font-size: 12px;
+  border-radius: 4px; padding: 1px 8px; }
+.tagchip.filter { cursor: pointer; border: 1px solid transparent; }
+.tagchip.filter:hover { border-color: #5b3aa6; }
+.tagchip.filter.active { background: #5b3aa6; color: #fff; }
+#tag-input { width: 100%; font-size: 13px; padding: 6px 8px; margin: 4px 0;
+  border: 1px solid #c4ccd4; border-radius: 6px; }

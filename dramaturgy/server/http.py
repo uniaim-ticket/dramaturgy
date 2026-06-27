@@ -46,6 +46,9 @@ class Router:
         self._add("GET", "/api/artifact/<name>", "h_get_artifact")
         self._add("PUT", "/api/artifact/<name>", "h_put_artifact")
         self._add("PATCH", "/api/area/<area_id>", "h_patch_area")
+        self._add("PATCH", "/api/concept/<concept_id>", "h_patch_concept")
+        self._add("GET", "/api/tags", "h_get_tags")
+        self._add("PUT", "/api/tags", "h_put_tags")
         self._add("POST", "/api/merge", "h_merge")
         self._add("GET", "/api/validate", "h_validate")
         self._add("POST", "/api/render", "h_render")
@@ -94,6 +97,15 @@ class Router:
 
     def h_patch_area(self, params, body, query):
         return self.api.patch_area(params["area_id"], body or {})
+
+    def h_patch_concept(self, params, body, query):
+        return self.api.patch_concept(params["concept_id"], body or {})
+
+    def h_get_tags(self, params, body, query):
+        return self.api.get_tags()
+
+    def h_put_tags(self, params, body, query):
+        return self.api.put_tags(body or {})
 
     def h_merge(self, params, body, query):
         return self.api.merge(body or {})

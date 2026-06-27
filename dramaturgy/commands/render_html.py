@@ -69,6 +69,12 @@ details.box .body { padding: 0 16px 16px; border-top: 1px solid #eef1f4; }
 .brk { overflow-wrap: anywhere; word-break: break-word; }
 td { overflow-wrap: anywhere; }
 .tag.area { background: #e5eefc; }
+.tag.tagchip { background: #efe7fb; color: #5b3aa6; }
+.tag-filter { display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  margin: 8px 0 14px; }
+.tagchip.filter { cursor: pointer; border: 1px solid transparent; }
+.tagchip.filter:hover { border-color: #5b3aa6; }
+.tagchip.filter.active { background: #5b3aa6; color: #fff; }
 .tag.concept { background: #e9f5ea; }
 .tag.phys { background: #f3eee2; font-family: ui-monospace, monospace; }
 .conf-high { color: #1a7f37; } .conf-medium { color: #9a6700; }
@@ -239,29 +245,61 @@ def render_areas(cat: Catalog, areas: list, concepts: dict) -> str:
             f'<div class="box-grid">{boxes}</div>')
 
 
+def tag_chips(tag_list, *, clickable: bool = False) -> str:
+    if not tag_list:
+        return '<span class="muted">—</span>'
+    out = []
+    for tg in tag_list:
+        attr = f' data-tag="{e(tg)}"' if clickable else ""
+        cls = "tag tagchip" + (" filter" if clickable else "")
+        out.append(f'<span class="{cls}"{attr}>{e(tg)}</span>')
+    return "".join(out)
+
+
 def render_concept_tables(cat: Catalog, concepts: list, areas: dict) -> str:
     if not concepts:
         return f'<p class="muted">{e(cat.t("empty.none"))}</p>'
+
+    # System-specific tag vocabulary present across the concepts → filter bar.
+    all_tags = sorted({tg for c in concepts for tg in (c.get("tags") or [])})
+
     rows = ""
     for c in concepts:
         cid, cname = c.get("id"), c.get("name")
+        ctags = c.get("tags") or []
 
         def cpin(field, label):
             return pin("concept", cid, cname, field, label)
 
         area_links = [_area_name(areas, aid) for aid in c.get("related_areas", [])]
+        # data-tags lets the inline filter show/hide rows by tag.
         rows += (
-            f'<tr><td class="brk"><b>{e(cname)}</b>{cpin("", cname)}<br>'
+            f'<tr class="concept-row" data-tags="{e(" ".join(ctags))}">'
+            f'<td class="brk"><b>{e(cname)}</b>{cpin("", cname)}<br>'
             f"<span class='muted'>{e(c.get('description'))}"
             f"{cpin('description', cat.t('label.concepts'))}</span></td>"
+            f'<td class="brk">{tag_chips(ctags)}'
+            f"{cpin('tags', cat.t('label.tags_col'))}</td>"
             f'<td class="brk">{tags(c.get("physical_tables"), "phys")}'
             f"{cpin('physical_tables', cat.t('label.physical_tables'))}</td>"
             f'<td>{tags(area_links, "area")}</td>'
             f'<td class="brk">{tags(c.get("states"))}'
             f"{cpin('states', cat.t('label.states'))}</td></tr>")
+
+    filter_bar = ""
+    if all_tags:
+        filter_bar = (
+            f'<div class="tag-filter" id="concept-tag-filter">'
+            f'<span class="muted tiny">{e(cat.t("concepts.filter"))}</span>'
+            f'<span class="tag tagchip filter active" data-tag="*">'
+            f'{e(cat.t("concepts.filter_all"))}</span>'
+            f'{tag_chips(all_tags, clickable=True)}</div>')
+
     return (
         f'<p class="muted">{e(cat.t("concepts.hint"))}</p>'
+        f'{filter_bar}'
         f"<table><tr><th>{e(cat.t('label.concept_table'))}</th>"
+        f"<th>{e(cat.t('label.tags_col'))}</th>"
         f"<th>{e(cat.t('label.physical_tables'))}</th>"
         f"<th>{e(cat.t('label.related'))}</th>"
         f"<th>{e(cat.t('label.states'))}</th></tr>{rows}</table>")
@@ -427,6 +465,24 @@ document.addEventListener('click', function (ev) {{
     field: b.dataset.rvField || '', field_label: b.dataset.rvFieldLabel || '' }};
   if (window.parent && window.parent !== window) window.parent.postMessage(msg, '*');
 }});
+
+// Concept tag filter: click a chip to show only matching concept rows.
+(function () {{
+  var bar = document.getElementById('concept-tag-filter');
+  if (!bar) return;
+  bar.addEventListener('click', function (ev) {{
+    var chip = ev.target.closest('.tagchip.filter');
+    if (!chip) return;
+    var tag = chip.dataset.tag;
+    bar.querySelectorAll('.tagchip.filter').forEach(function (c) {{
+      c.classList.toggle('active', c === chip);
+    }});
+    document.querySelectorAll('.concept-row').forEach(function (row) {{
+      var tags = (row.dataset.tags || '').split(' ').filter(Boolean);
+      row.style.display = (tag === '*' || tags.indexOf(tag) >= 0) ? '' : 'none';
+    }});
+  }});
+}})();
 </script>
 </body>
 </html>

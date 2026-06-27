@@ -25,6 +25,12 @@ Concept data (important):
   physical_tables**.
 - Declare what this area does to each concept as **concept_crud** (ops is a
   subset of "C"/"R"/"U"/"D", e.g. "CRU"). CRUD is expressed per concept data.
+- Add system-specific **tags** to each concept (e.g. the master vs.
+  transaction distinction). Prefer the tag vocabulary below if present; add new
+  tags when useful.
+
+Tag vocabulary (system-specific):
+{tag_vocabulary}
 
 Output area-map JSON shape (for this area):
 
@@ -46,6 +52,7 @@ Output area-map JSON shape (for this area):
   "concepts": [{
     "id": "<concept_id>", "name": "", "description": "", "kind": "entity|state|event|value_object|external_system",
     "physical_tables": ["<physical table/model name>"],
+    "tags": ["<system-specific tag>"],
     "states": [""], "code_refs": [""], "confidence": "high|medium|low"
   }],
   "actors": [{"id": "", "name": "", "description": "", "actions": [{"area_id": "", "action": "", "description": ""}]}],

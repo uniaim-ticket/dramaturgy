@@ -600,6 +600,7 @@ HTMLに必要なビュー:
       "description": "",
       "kind": "entity|state|event|value_object|external_system|screen|api",
       "physical_tables": [],
+      "tags": [],
       "crud_by_area": [
         { "area_id": "", "ops": "CRUD" }
       ],
@@ -637,6 +638,18 @@ HTMLに必要なビュー:
   同じCRUDデータを「領域から見る」「概念データから見る」の双方向で表示できる。
 * 旧 `crud_summary` / 領域側 `tables` フィールドは廃止（CRUDは概念単位、テーブルは
   概念の `physical_tables` に集約）。
+
+### 概念データの任意タグ（システム固有）
+
+* 重要度や区別はシステムごとに異なる（例: あるシステムでは「マスタ／トランザクション」の
+  区別が重要）。そこで概念には自由な `tags: []`（文字列）を持たせる。
+* タグ語彙はシステム固有なので、プロジェクトごとに `.dramaturgy/tags.json`
+  （`{tags: [{name, description}]}`）で管理する。語彙は**助言的**で、サジェスト・説明・
+  Claudeへの提示に使うが、概念に任意のタグ文字列を付けてよい。
+* 付与は2経路: ① カード生成時に Claude がシステム固有観点で付与（語彙があれば渡す）、
+  ② 人間が UI で直接編集（Claude不要の軽量操作として `PATCH /api/concept/<id>` で
+  `meaning-map.json` に書き戻す）。
+* HTMLでは概念データ表にタグ列を設け、タグでの絞り込みを可能にする。
 
 ## Claude用プロンプト
 

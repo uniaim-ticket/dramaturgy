@@ -30,6 +30,8 @@ iframe#view-frame { flex: 1; border: 0; background: #fff; }
   width: 380px; min-width: 300px; display: flex; flex-direction: column;
   border-left: 1px solid #e0e4e8; background: #fbfcfd;
 }
+/* The `hidden` attribute must win over the flex display above. */
+#queue[hidden] { display: none; }
 .queue-head { padding: 12px 14px; border-bottom: 1px solid #e2e6ea; }
 .queue-head h2 { margin: 0 0 8px; font-size: 15px; }
 #rv-list { flex: 1; overflow: auto; padding: 12px 14px; }

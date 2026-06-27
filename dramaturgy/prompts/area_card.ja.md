@@ -43,6 +43,14 @@
 - ロードバランサ・監視基盤・横断ミドルウェアのような**業務上の登場人物ではない構成要素**は
   actors に入れず、**components** に入れてください。
 
+業務フロー概要（overview_flow）について（重要）:
+- この領域に、**そのシステムを使ったことがない人でも全体像が理解できる概要レベルの業務フロー**を
+  1つ付けてください。細部の分岐や例外は省き、主要な流れだけを 5〜9 ステップ程度で表します。
+- **スイムレーン形式**にします。`lanes` は関係する登場人物（actor_id）の並び（縦レーン）。
+  各 `steps` は `{lane: <actor_id>, label: "短い動作"}` で、業務が起きる順に並べます。
+- lane には actors の id を使ってください（構成要素 components ではなく、人/アクター）。
+- 詳細なフロー（手順の列挙）は従来どおり `flows` に書けます。overview_flow は概要専用です。
+
 出力する area-map JSON の形（この領域ぶん）:
 
 ```json
@@ -55,6 +63,11 @@
     "actors": [{"actor_id": "", "actions": [""]}],
     "concepts": ["<concept_id>"],
     "concept_crud": [{"concept_id": "<concept_id>", "ops": "CRUD"}],
+    "overview_flow": {
+      "title": "<この領域の概要フローの名前>",
+      "lanes": ["<actor_id>", "<actor_id>"],
+      "steps": [{"lane": "<actor_id>", "label": "<短い動作>"}]
+    },
     "flows": [{"name": "", "steps": [""]}],
     "apis": [""], "screens": [""], "code_refs": ["path/to/file"],
     "risk_points": [""], "open_questions": [""],

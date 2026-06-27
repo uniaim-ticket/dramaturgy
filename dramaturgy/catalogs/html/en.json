@@ -26,6 +26,7 @@
   "concepts.filter": "Filter by tag:",
   "concepts.filter_all": "All",
   "label.flows": "Key flows",
+  "label.overview_flow": "Business flow overview (swimlane)",
   "label.crud": "CRUD (by concept)",
   "label.tables": "Related tables",
   "label.apis": "Related APIs",

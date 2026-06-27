@@ -71,6 +71,26 @@ td { overflow-wrap: anywhere; }
 .tag.area { background: #e5eefc; }
 .tag.tagchip { background: #efe7fb; color: #5b3aa6; }
 .tag.val { background: #eef3f7; }
+
+/* Overview business flow (swimlane) */
+.overview-flow { margin: 12px 0 16px; }
+.overview-flow h4 { margin: 0 0 8px; font-size: 13px; color: #41506a; }
+.swimlane { border: 1px solid #e2e6ea; border-radius: 8px; overflow: hidden;
+  background: #fbfcfd; }
+.sl-title { padding: 6px 10px; font-weight: 600; font-size: 13px;
+  background: #eef3f8; border-bottom: 1px solid #e2e6ea; }
+.sl-head { display: grid; gap: 0; }
+.sl-lane { padding: 6px 8px; font-size: 12px; font-weight: 600; color: #41506a;
+  text-align: center; background: #e9eef4; border-right: 1px solid #dde3ea; }
+.sl-lane:last-child { border-right: 0; }
+.sl-row { display: grid; gap: 0; border-top: 1px solid #eef1f4;
+  background-image: none; }
+/* faint lane separators down the rows */
+.sl-step { margin: 6px; padding: 6px 8px; font-size: 12px; background: #fff;
+  border: 1px solid #cdd6e0; border-radius: 6px; }
+.sl-n { display: inline-block; min-width: 16px; height: 16px; line-height: 16px;
+  text-align: center; background: #2563eb; color: #fff; border-radius: 50%;
+  font-size: 10px; margin-right: 6px; }
 h3.grp { margin: 18px 0 8px; font-size: 14px; color: #41506a;
   border-bottom: 1px solid #e7ebf0; padding-bottom: 4px; }
 h3.grp a { color: #2563eb; text-decoration: none; }
@@ -178,8 +198,59 @@ def _area_name(areas: dict, aid: str) -> str:
     return a.get("name") if a and a.get("name") else aid
 
 
-def render_area_box(cat: Catalog, area: dict, concepts: dict) -> str:
+def render_swimlane(cat: Catalog, flow: dict, actors: dict) -> str:
+    """Render an overview business flow as a swimlane diagram.
+
+    ``flow`` = {title?, lanes: [actor_id, …], steps: [{lane, label}, …]}.
+    Lanes are vertical columns (one per actor); steps drop into their lane in
+    order, numbered, so someone who has never used the system can follow the
+    overall flow top-to-bottom. Pure CSS grid — no JS, works in the iframe.
+    """
+    lanes = flow.get("lanes") or []
+    steps = flow.get("steps") or []
+    if not lanes:
+        # Fall back to the order the steps mention lanes in.
+        seen = []
+        for s in steps:
+            ln = s.get("lane")
+            if ln and ln not in seen:
+                seen.append(ln)
+        lanes = seen
+    if not lanes or not steps:
+        return ""
+
+    lane_idx = {ln: i for i, ln in enumerate(lanes)}
+    ncols = len(lanes)
+
+    def lane_label(ln):
+        a = actors.get(ln)
+        return a.get("name") if a and a.get("name") else ln
+
+    # Header row of lane names.
+    cells = "".join(f'<div class="sl-lane">{e(lane_label(ln))}</div>'
+                    for ln in lanes)
+    # Each step is one grid row; the box sits in its lane's column.
+    rows = ""
+    for n, s in enumerate(steps, 1):
+        ln = s.get("lane")
+        col = lane_idx.get(ln, 0) + 1
+        label = s.get("label") or s.get("action") or ""
+        rows += (
+            f'<div class="sl-row" style="grid-template-columns:repeat({ncols},1fr)">'
+            f'<div class="sl-step" style="grid-column:{col}">'
+            f'<span class="sl-n">{n}</span>{e(label)}</div></div>')
+    title = flow.get("title") or flow.get("name") or ""
+    title_html = f'<div class="sl-title">{e(title)}</div>' if title else ""
+    return (
+        f'<div class="swimlane">{title_html}'
+        f'<div class="sl-head" style="grid-template-columns:repeat({ncols},1fr)">'
+        f'{cells}</div>{rows}</div>')
+
+
+def render_area_box(cat: Catalog, area: dict, concepts: dict,
+                    actors: dict | None = None) -> str:
     aid, aname = area.get("id"), area.get("name")
+    actors = actors or {}
 
     def apin(field, label):
         return pin("area", aid, aname, field, label)
@@ -231,6 +302,18 @@ def render_area_box(cat: Catalog, area: dict, concepts: dict) -> str:
         f"<dt>{k}{apin(fkey, k)}</dt><dd>{v}</dd>" for fkey, k, v in rows)
     low = (f'<div class="low-note">{e(cat.t("note.low_confidence"))}</div>'
            if area.get("confidence") == "low" else "")
+
+    # Overview business flow (swimlane) — the at-a-glance picture for someone
+    # who has never used the system. Shown above the detail fields.
+    overview = area.get("overview_flow") or {}
+    swim = render_swimlane(cat, overview, actors)
+    overview_html = ""
+    if swim:
+        overview_html = (
+            f'<div class="overview-flow"><h4>{e(cat.t("label.overview_flow"))}'
+            f'{apin("overview_flow", cat.t("label.overview_flow"))}</h4>'
+            f'{swim}</div>')
+
     return (
         f'<details class="box" id="area-{e(aid)}">'
         f'<summary><span class="sum-name">{e(aname)}'
@@ -238,13 +321,15 @@ def render_area_box(cat: Catalog, area: dict, concepts: dict) -> str:
         f'<span class="sum-id">{e(aid)}</span></summary>'
         f'<div class="body"><p>{e(area.get("one_liner"))}'
         f'{apin("one_liner", cat.t("label.one_liner"))}</p>'
+        f'{overview_html}'
         f'<dl class="kv">{kv}</dl>{low}</div></details>')
 
 
-def render_areas(cat: Catalog, areas: list, concepts: dict) -> str:
+def render_areas(cat: Catalog, areas: list, concepts: dict,
+                 actors: dict | None = None) -> str:
     if not areas:
         return f'<p class="muted">{e(cat.t("empty.none"))}</p>'
-    boxes = "".join(render_area_box(cat, a, concepts) for a in areas)
+    boxes = "".join(render_area_box(cat, a, concepts, actors) for a in areas)
     return (f'<p class="muted">{e(cat.t("areas.hint"))}</p>'
             f'<div class="box-grid">{boxes}</div>')
 
@@ -526,6 +611,7 @@ def render_html(mm: dict, ui_lang: str) -> str:
     concepts = mm.get("concepts", [])
     concept_map = {c["id"]: c for c in concepts}
     area_map = {a["id"]: a for a in areas}
+    actor_map = {a["id"]: a for a in mm.get("actors", [])}
 
     sections = [
         f'<section id="actors"><h2>{e(cat.t("nav.actors"))}</h2>'
@@ -535,7 +621,7 @@ def render_html(mm: dict, ui_lang: str) -> str:
         f'<section id="classifications"><h2>{e(cat.t("nav.classifications"))}</h2>'
         f'{render_classifications(cat, mm.get("classifications", []), concept_map)}</section>',
         f'<section id="areas"><h2>{e(cat.t("nav.areas"))}</h2>'
-        f'{render_areas(cat, areas, concept_map)}</section>',
+        f'{render_areas(cat, areas, concept_map, actor_map)}</section>',
         f'<section id="crud"><h2>{e(cat.t("nav.crud"))}</h2>'
         f'{render_crud(cat, areas, concepts)}</section>',
         f'<section id="components"><h2>{e(cat.t("nav.components"))}</h2>'

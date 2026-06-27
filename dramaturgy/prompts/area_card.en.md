@@ -52,6 +52,16 @@ Actors vs. components (important):
 - Structural pieces that are NOT business actors — load balancers, monitoring,
   cross-cutting middleware — go in **components**, not actors.
 
+Overview business flow (important):
+- Give the area one **overview-level business flow that someone who has never
+  used the system can follow**. Omit detailed branches/exceptions; show only
+  the main path in ~5–9 steps.
+- Use a **swimlane** shape: `lanes` is the ordered list of involved actors
+  (vertical lanes, by actor_id); each `steps` entry is
+  `{lane: <actor_id>, label: "short action"}`, in the order things happen.
+- Lanes must use actor ids (people/actors, not components).
+- Detailed step lists can still go in `flows`; overview_flow is the summary.
+
 Output area-map JSON shape (for this area):
 
 ```json
@@ -64,6 +74,11 @@ Output area-map JSON shape (for this area):
     "actors": [{"actor_id": "", "actions": [""]}],
     "concepts": ["<concept_id>"],
     "concept_crud": [{"concept_id": "<concept_id>", "ops": "CRUD"}],
+    "overview_flow": {
+      "title": "<name of this area's overview flow>",
+      "lanes": ["<actor_id>", "<actor_id>"],
+      "steps": [{"lane": "<actor_id>", "label": "<short action>"}]
+    },
     "flows": [{"name": "", "steps": [""]}],
     "apis": [""], "screens": [""], "code_refs": ["path/to/file"],
     "risk_points": [""], "open_questions": [""],

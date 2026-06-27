@@ -137,8 +137,10 @@ The UI is a **map preview + a review queue**. The flow is:
    - **Classifications** — sets of allowed values (e.g. point-grant method,
      mail kind), kept *out* of concept data. Each is either a detail of a
      concept or a standalone business-rule premise.
-   - **Areas** as clickable boxes, and **CRUD** viewable *by area* and
-     *by concept*.
+   - **Areas** as clickable boxes. Expanding an area shows an **overview
+     business flow as a swimlane** (vertical lanes = the involved actors) so a
+     newcomer can grasp the whole flow at a glance, plus **CRUD** viewable
+     *by area* and *by concept*.
    - **Components** — structural systems that are not business actors (load
      balancers, monitoring, cross-cutting middleware).
 3. **Add findings inline**: click the **+** on any actor, concept, or area (or

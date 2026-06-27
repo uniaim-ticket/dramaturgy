@@ -369,5 +369,46 @@ class ClassificationComponentTests(unittest.TestCase):
                 _time.sleep(0.02)
 
 
+class OverviewFlowTests(unittest.TestCase):
+    """An area's overview_flow renders as a swimlane (lanes = actors)."""
+
+    def test_swimlane_rendered_in_area(self):
+        from dramaturgy.commands.render_html import render_html
+        mm = {
+            "content_lang": "ja", "system": {"name": "S"},
+            "areas": [{"id": "sales", "name": "販売", "one_liner": "x",
+                       "concepts": [], "concept_crud": [],
+                       "related_area_ids": [], "child_area_ids": [],
+                       "overview_flow": {
+                           "title": "購入の流れ",
+                           "lanes": ["visitor", "system"],
+                           "steps": [
+                               {"lane": "visitor", "label": "申込"},
+                               {"lane": "system", "label": "発券"}]}}],
+            "concepts": [], "classifications": [], "components": [],
+            "actors": [{"id": "visitor", "name": "来場者", "category": "person"},
+                       {"id": "system", "name": "システム", "category": "system"}],
+            "flows": []}
+        html = render_html(mm, "ja")
+        area = html.split('id="area-sales"')[1].split("</details>")[0]
+        self.assertIn('class="swimlane"', area)
+        # Lanes labeled by actor name, steps numbered, reviewable.
+        self.assertIn("来場者", area)
+        self.assertIn("申込", area)
+        self.assertIn('class="sl-n">1<', area)
+        self.assertIn('data-rv-field="overview_flow"', area)
+
+    def test_no_flow_no_swimlane(self):
+        from dramaturgy.commands.render_html import render_html
+        mm = {"content_lang": "ja", "system": {"name": "S"},
+              "areas": [{"id": "a", "name": "A", "concepts": [],
+                         "concept_crud": [], "related_area_ids": [],
+                         "child_area_ids": []}],
+              "concepts": [], "classifications": [], "components": [],
+              "actors": [], "flows": []}
+        html = render_html(mm, "ja")
+        self.assertNotIn('class="swimlane"', html)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

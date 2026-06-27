@@ -26,11 +26,9 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "setup":       ("setup_cmd", "initialize .dramaturgy/config.json (languages + project)"),
     "serve":       ("serve", "start the web UI; edit the map and drive Claude Code"),
     # mechanical (also used by the server and by scripts/Claude Code)
-    "analyze-repo": ("analyze_repo", "index source files, roles, routes, table hints"),
-    "analyze-schema": ("analyze_schema", "parse SQL DDL into tables / FKs / status columns"),
-    "candidates":  ("propose_area_candidates", "assemble area-grouping material for Claude"),
+    "analyze-repo": ("analyze_repo", "inventory repo files/dirs (no semantic extraction)"),
     "tree-prompt": ("build_area_tree_prompt", "render the content_lang area-tree prompt"),
-    "pack":        ("build_area_pack", "gather one area's files/tables/APIs (warns if large)"),
+    "pack":        ("build_area_pack", "list one area's files for Claude to read (warns if large)"),
     "subdivide":   ("suggest_subdivision", "propose natural sub-areas (never auto-splits)"),
     "merge":       ("merge_maps", "merge per-area maps into meaning-map.json"),
     "validate":    ("validate_map", "mechanical consistency + language invariants"),

@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
-"""validate_map.py — machine-checkable consistency checks.
+"""validate_map — machine-checkable consistency checks.
 
-Verifies referential integrity of meaning-map.json against the source and
-schema indexes, parent/child and related-area consistency, cycle freedom,
-and the language invariants introduced for the public/multilingual design:
-- ui_lang / content_lang are supported codes
-- the map records content_lang and it matches config.json
-- UI/CLI and HTML message catalogs have no missing/extra keys
+Checks only what can be verified mechanically and reliably:
+- code_refs point to files that actually exist
+- parent/child and related-area consistency; cycle freedom
+- language invariants (supported codes, content_lang matches config,
+  message catalogs have no missing/extra keys)
+
+It does NOT check that referenced tables/APIs "exist", because those are
+discovered by Claude reading the source (ORM/migration/framework), not from
+a mechanical index — so there is no authoritative list to check against.
 
 Exits non-zero when any error-level problem is found (warnings don't fail).
 """
@@ -64,14 +67,10 @@ def _detect_cycle(areas: dict[str, dict]) -> list[str] | None:
     return None
 
 
-def validate(mm: dict, source_index: dict, schema_index: dict | None,
-             config, repo_root: str, report: Report) -> None:
+def validate(mm: dict, source_index: dict, config, repo_root: str,
+             report: Report) -> None:
     areas = {a["id"]: a for a in mm.get("areas", [])}
     concepts = {c["id"] for c in mm.get("concepts", [])}
-    table_names = {t["name"] for t in (schema_index or {}).get("tables", [])}
-    all_routes = {
-        r for f in source_index.get("files", []) for r in f.get("routes", [])
-    }
     code_paths = {f["path"] for f in source_index.get("files", [])}
     root = Path(repo_root)
 
@@ -95,14 +94,8 @@ def validate(mm: dict, source_index: dict, schema_index: dict | None,
         for problem in validate_catalogs(domain):
             report.error("validate.catalog_problem", detail=problem)
 
-    # --- referential integrity ---
+    # --- referential integrity (only reliably-checkable refs) ---
     for area in areas.values():
-        for tbl in area.get("tables", []):
-            if table_names and tbl not in table_names:
-                report.error("validate.unknown_table", name=tbl)
-        for api in area.get("apis", []):
-            if all_routes and api not in all_routes:
-                report.error("validate.unknown_api", name=api)
         for ref in area.get("code_refs", []):
             # code_refs may be "path" or "path:line"
             p = ref.split(":", 1)[0]
@@ -150,21 +143,19 @@ def main(argv: list[str] | None = None) -> int:
     add_lang_args(parser)
     parser.add_argument("--map", default=None)
     parser.add_argument("--source-index", default=None)
-    parser.add_argument("--schema-index", default=None)
     args = parser.parse_args(argv)
     rs = resolve(args)
     ws = workspace_dir(rs.config.repo_root)
 
     print(rs.ui.t("validate.start"))
     mm = read_json(args.map or ws / "meaning-map.json")
-    source_index = read_json(args.source_index or ws / "source-index.json")
     try:
-        schema_index = read_json(args.schema_index or ws / "schema-index.json")
+        source_index = read_json(args.source_index or ws / "source-index.json")
     except FileNotFoundError:
-        schema_index = None
+        source_index = {"files": []}
 
     report = Report(rs.ui)
-    validate(mm, source_index, schema_index, rs.config, rs.config.repo_root, report)
+    validate(mm, source_index, rs.config, rs.config.repo_root, report)
 
     for w in report.warnings:
         print("WARN: " + w)

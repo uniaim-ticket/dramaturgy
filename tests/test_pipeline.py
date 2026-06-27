@@ -108,11 +108,12 @@ class PipelineTests(unittest.TestCase):
                 "--content-lang", "ja", "--project-name", "Sample",
                 "--repo-root", d]))
             self.assertEqual(0, dra(["analyze-repo", "--repo-root", d]))
-            self.assertEqual(0, dra(["analyze-schema", "--repo-root", d]))
 
-            schema = json.loads((ws / "schema-index.json").read_text())
-            names = {t["name"] for t in schema["tables"]}
-            self.assertEqual(names, {"events", "tickets"})
+            # analyze-repo is inventory-only: files/dirs, no semantic tables.
+            index = json.loads((ws / "source-index.json").read_text())
+            self.assertIn("directories", index)
+            self.assertNotIn("by_role", index)
+            self.assertTrue(all("roles" not in f for f in index["files"]))
 
             # Author a minimal area-tree + area map.
             (ws / "area-tree.json").write_text(json.dumps({
@@ -120,8 +121,7 @@ class PipelineTests(unittest.TestCase):
                 "system": {"name": "Sample", "summary": "s"},
                 "areas": [{
                     "id": "sales", "name": "販売", "one_liner": "x",
-                    "source_hints": {"tables": ["tickets"],
-                                     "keywords": ["ticket"]},
+                    "source_hints": {"keywords": ["ticket"]},
                     "confidence": "high",
                 }],
             }, ensure_ascii=False), encoding="utf-8")
@@ -167,7 +167,7 @@ class PipelineTests(unittest.TestCase):
             self.assertIn("販売", html)
             self.assertIn('lang="ja"', html)
 
-    def test_validate_detects_bad_table(self):
+    def test_validate_detects_missing_code_ref(self):
         with tempfile.TemporaryDirectory() as d:
             root = Path(d)
             _make_sample_repo(root)
@@ -175,20 +175,20 @@ class PipelineTests(unittest.TestCase):
             dra(["setup", "--no-input", "--repo-root", d,
                  "--content-lang", "ja"])
             dra(["analyze-repo", "--repo-root", d])
-            dra(["analyze-schema", "--repo-root", d])
             mm = {
                 "content_lang": "ja",
                 "system": {"name": "S", "summary": "",
                            "source_summary": {}},
                 "actors": [], "concepts": [], "flows": [],
-                "areas": [{"id": "a", "name": "A", "tables": ["ghost"],
-                           "apis": [], "code_refs": [],
+                "areas": [{"id": "a", "name": "A", "tables": ["anything"],
+                           "apis": [], "code_refs": ["no/such/file.rb"],
                            "related_area_ids": [], "child_area_ids": [],
                            "confidence": "high"}],
             }
             (ws / "meaning-map.json").write_text(
                 json.dumps(mm, ensure_ascii=False), encoding="utf-8")
-            # Non-zero exit because 'ghost' is not a known table.
+            # Non-zero exit: the referenced file does not exist. (Tables are
+            # no longer checked — Claude discovers those from source.)
             self.assertEqual(1, dra(["validate", "--repo-root", d]))
 
     def test_mixed_language_html(self):

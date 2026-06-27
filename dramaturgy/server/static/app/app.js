@@ -19,6 +19,7 @@ const I18N = {
     "saved": "保存しました", "save_failed": "保存に失敗", "area.save": "この領域を保存",
     "init.run": "Claudeで一括初期化", "init.help": "全工程を一度に実行します: 解析 → 領域ツリー → 領域カード → 統合 → 検査 → HTML生成。完了後、下の各ステップで個別に調整できます。",
     "init.running": "一括初期化を実行中…", "init.done": "一括初期化が完了しました",
+    "job.idle": "応答待ち",
   },
   en: {
     "btn.save_config": "Save", "step.analyze": "1. Analyze", "step.tree": "2. Area tree",
@@ -35,6 +36,7 @@ const I18N = {
     "saved": "Saved", "save_failed": "Save failed", "area.save": "Save this area",
     "init.run": "Initialize all with Claude", "init.help": "Run the full pipeline once: analyze → area tree → area cards → merge → validate → render. Adjust individual steps below afterwards.",
     "init.running": "Initializing…", "init.done": "Initialization complete",
+    "job.idle": "awaiting response",
   },
 };
 
@@ -244,27 +246,69 @@ function field(name, value, multiline) {
 }
 
 // ---- job polling -------------------------------------------------------
-function showJob(elId, job) {
+const SPINNER = ["⠋","⠙","⠹","⠸","⠼","⠴","⠦","⠧","⠇","⠏"];
+
+function fmtDuration(sec) {
+  sec = Math.round(sec || 0);
+  const m = Math.floor(sec / 60), s = sec % 60;
+  return m ? `${m}m${String(s).padStart(2, "0")}s` : `${s}s`;
+}
+
+function liveStats(job, frame) {
+  // Proves the Claude session is alive: spinner + elapsed + pid + CPU/mem.
+  const spin = SPINNER[frame % SPINNER.length];
+  const bits = [`${spin} ${t("job.running")}`, `${fmtDuration(job.elapsed_sec)}`];
+  if (job.pid) bits.push(`pid ${job.pid}`);
+  if (job.process) {
+    bits.push(`CPU ${job.process.cpu_percent}%`);
+    bits.push(`${job.process.rss_mb}MB`);
+  }
+  // If we haven't seen output in a while, say so (still alive, just thinking).
+  if (job.idle_sec >= 8) bits.push(`${t("job.idle")} ${fmtDuration(job.idle_sec)}`);
+  return bits.join(" · ");
+}
+
+function showJob(elId, job, frame = 0) {
   const el = document.getElementById(elId);
   if (!el) return;
   const lines = (job.progress || []).map((l) => `<div class="line">${escapeHtml(l)}</div>`).join("");
   const head = job.status === "running"
-    ? `<div class="spin">${t("job.running")}</div>`
+    ? `<div class="spin">${escapeHtml(liveStats(job, frame))}</div>`
     : job.status === "done"
-      ? `<div>${t("job.done")}${job.session_id ? " · " + job.session_id : ""}</div>`
+      ? `<div>${t("job.done")} · ${fmtDuration(job.elapsed_sec)}${job.session_id ? " · " + job.session_id : ""}</div>`
       : `<div class="status err">${t("job.error")}: ${escapeHtml(job.error || job.status)}</div>`;
   el.innerHTML = head + lines;
 }
 
 async function pollJob(jobId, elId, onDone, onEnd) {
   let since = 0;
+  let frame = 0;
+  let last = null;
   const acc = { progress: [] };
+
+  // Animate the spinner ~3x/sec so the user always sees movement, even
+  // between the (slower) server polls — this is the "it's alive" signal.
+  const animate = setInterval(() => {
+    if (last && last.status === "running") {
+      frame += 1;
+      showJob(elId, { ...last, progress: acc.progress }, frame);
+    }
+  }, 300);
+
   const tick = async () => {
-    const { data } = await api("GET", `/api/jobs/${jobId}?since=${since}`);
+    let data;
+    try {
+      ({ data } = await api("GET", `/api/jobs/${jobId}?since=${since}`));
+    } catch {
+      setTimeout(tick, 1500);   // transient network hiccup; keep polling
+      return;
+    }
     acc.progress.push(...(data.progress || []));
     since = data.progress_total;
-    showJob(elId, { ...data, progress: acc.progress });
+    last = data;
+    showJob(elId, { ...data, progress: acc.progress }, frame);
     if (["done", "error", "aborted"].includes(data.status)) {
+      clearInterval(animate);
       if (data.status === "done" && onDone) onDone();
       if (onEnd) onEnd(data.status);
       return;

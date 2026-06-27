@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
-"""suggest_subdivision.py — propose natural sub-areas for a large area.
+"""suggest_subdivision — propose natural sub-areas for a large area.
 
-This is supporting material for Claude's judgment, NOT an automatic split
-(see rfp.md). For the requested area, it clusters the matched files by
-directory and the matched tables by FK-connected components, and reports
-size estimates plus reasons a split might be natural — and notes when a
-split may not be warranted.
+Supporting material for Claude's judgment, NOT an automatic split (see
+rfp.md). It clusters the area's matched files by directory and reports size
+estimates, so Claude can decide whether a split is natural. Concept/table
+grouping is left to Claude reading the files — not inferred here.
 """
 
 from __future__ import annotations
@@ -14,12 +13,9 @@ import argparse
 from collections import defaultdict
 from pathlib import PurePosixPath
 
-
-from ..common.area_match import (  # noqa: E402
-    estimate_tokens, find_area, match_files, match_tables,
-)
-from ..common.config import add_lang_args, resolve  # noqa: E402
-from ..common.paths import read_json, write_json, workspace_dir  # noqa: E402
+from ..common.area_match import estimate_tokens, find_area, match_files
+from ..common.config import add_lang_args, resolve
+from ..common.paths import read_json, write_json, workspace_dir
 
 
 def _cluster_files_by_dir(files: list[dict]) -> list[dict]:
@@ -33,44 +29,15 @@ def _cluster_files_by_dir(files: list[dict]) -> list[dict]:
         clusters.append({
             "dir": key,
             "file_count": len(group),
-            "lines": sum(f["lines"] for f in group),
+            "lines": sum(f.get("lines") or 0 for f in group),
             "sample_files": [f["path"] for f in group[:8]],
         })
     return clusters
 
 
-def _table_components(tables: list[dict]) -> list[list[str]]:
-    """Connected components over FK edges among the matched tables."""
-    names = {t["name"] for t in tables}
-    adj: dict[str, set] = {n: set() for n in names}
-    for t in tables:
-        for fk in t.get("foreign_keys", []):
-            ref = fk.get("ref_table")
-            if ref in names:
-                adj[t["name"]].add(ref)
-                adj[ref].add(t["name"])
-    seen: set[str] = set()
-    comps: list[list[str]] = []
-    for n in names:
-        if n in seen:
-            continue
-        stack, comp = [n], []
-        while stack:
-            cur = stack.pop()
-            if cur in seen:
-                continue
-            seen.add(cur)
-            comp.append(cur)
-            stack.extend(adj[cur] - seen)
-        comps.append(sorted(comp))
-    return sorted(comps, key=lambda c: -len(c))
-
-
-def suggest(area: dict, source_index: dict, schema_index: dict | None) -> dict:
+def suggest(area: dict, source_index: dict) -> dict:
     files = match_files(area, source_index)
-    tables = match_tables(area, schema_index)
     file_clusters = _cluster_files_by_dir(files)
-    table_comps = _table_components(tables)
 
     candidates = []
     for fc in file_clusters:
@@ -78,33 +45,24 @@ def suggest(area: dict, source_index: dict, schema_index: dict | None) -> dict:
             "suggested_id": f"{area['id']}.{PurePosixPath(fc['dir']).name or 'core'}",
             "basis": "directory",
             "why_natural": "Files cluster under a distinct directory; often a "
-                           "separate responsibility.",
+                           "separate responsibility. Confirm by reading them.",
             "related_files": fc["sample_files"],
             "file_count": fc["file_count"],
             "lines": fc["lines"],
         })
-    for comp in table_comps:
-        if len(comp) >= 2:
-            candidates.append({
-                "suggested_id": f"{area['id']}.{comp[0]}",
-                "basis": "table_component",
-                "why_natural": "Tables form a connected FK cluster; likely one "
-                               "lifecycle/concept group.",
-                "related_tables": comp,
-            })
 
     do_not_split = []
-    if len(file_clusters) <= 1 and len(table_comps) <= 1:
+    if len(file_clusters) <= 1:
         do_not_split.append(
-            "Material forms a single cohesive cluster; splitting would likely "
-            "harm comprehension. Keep as one area unless Claude sees a clear "
-            "business reason.")
+            "Files form a single cohesive directory cluster; splitting would "
+            "likely harm comprehension. Keep as one area unless reading the "
+            "code reveals a clear business reason.")
 
     return {
-        "note": "Supporting material only. Claude decides whether to split.",
+        "note": "Supporting material only. Claude decides whether to split, "
+                "based on reading the files.",
         "area_id": area["id"],
-        "estimated_tokens": estimate_tokens(
-            {"files": files, "tables": tables}),
+        "estimated_tokens": estimate_tokens({"files": files}),
         "subdivision_candidates": candidates,
         "do_not_split_reasons": do_not_split,
     }
@@ -116,7 +74,6 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--area-id", required=True)
     parser.add_argument("--area-tree", default=None)
     parser.add_argument("--source-index", default=None)
-    parser.add_argument("--schema-index", default=None)
     parser.add_argument("--out", default=None)
     args = parser.parse_args(argv)
     rs = resolve(args)
@@ -129,12 +86,7 @@ def main(argv: list[str] | None = None) -> int:
         print(rs.ui.t("pack.area_not_found", area_id=args.area_id))
         return 1
     source_index = read_json(args.source_index or ws / "source-index.json")
-    try:
-        schema_index = read_json(args.schema_index or ws / "schema-index.json")
-    except FileNotFoundError:
-        schema_index = None
-
-    result = suggest(area, source_index, schema_index)
+    result = suggest(area, source_index)
     out = args.out or str(ws / "subdivisions" / f"{args.area_id}.json")
     write_json(out, result)
     print(rs.ui.t("common.wrote", path=out))

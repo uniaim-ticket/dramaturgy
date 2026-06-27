@@ -1,147 +1,109 @@
 #!/usr/bin/env python3
-"""analyze_repo.py — build a source-code index.
+"""analyze_repo — collect a reliable file/directory inventory.
 
-Walks the repository and produces ``.dramaturgy/source-index.json`` with
-per-file metadata plus heuristic candidates (routes, controllers, models,
-migrations, views, jobs, table-name strings). The heuristics are
-language-agnostic regexes; Claude does the meaning judgment downstream, so
-false positives here are acceptable.
+This step deliberately does NOT try to guess tables, routes, classes,
+models, or "roles" from the source. Those are semantic facts that depend on
+the framework/ORM/conventions in use and cannot be recovered reliably with
+regexes — discovering them is Claude's job, reading the actual files (Claude
+Code has repository access).
 
-This tool emits only progress in the UI language; its output JSON is
-data and contains no localized prose.
+What we collect here is only what can be known mechanically and reliably:
+
+* the list of files (path, extension, line count)
+* per-directory and per-extension aggregates
+
+This inventory orients Claude (where the code is, how big each area is) so it
+can decide which files to open. It contains no inferred meaning.
+
+Output: ``.dramaturgy/source-index.json``.
 """
 
 from __future__ import annotations
 
 import argparse
-import re
-from pathlib import Path
+from collections import defaultdict
+from pathlib import Path, PurePosixPath
 
+from ..common.config import add_lang_args, resolve
+from ..common.paths import write_json, workspace_dir
 
-from ..common.config import add_lang_args, resolve  # noqa: E402
-from ..common.paths import write_json, workspace_dir  # noqa: E402
-
-# Directories that never carry domain meaning.
+# Directories that never carry domain meaning (skip wholesale).
 SKIP_DIRS = {
     ".git", ".hg", ".svn", "node_modules", "vendor", "dist", "build",
     "__pycache__", ".dramaturgy", ".venv", "venv", ".idea", ".vscode",
-    "target", ".next", ".cache", "coverage", ".pytest_cache",
+    "target", ".next", ".cache", "coverage", ".pytest_cache", ".mypy_cache",
+    ".tox", ".gradle", "bin", "obj",
 }
-CODE_EXTS = {
-    ".py", ".rb", ".php", ".js", ".jsx", ".ts", ".tsx", ".go", ".java",
-    ".kt", ".cs", ".scala", ".rs", ".ex", ".exs", ".vue", ".sql",
+# Binary / non-source extensions to ignore when counting lines.
+SKIP_EXTS = {
+    ".png", ".jpg", ".jpeg", ".gif", ".svg", ".ico", ".webp", ".pdf",
+    ".zip", ".gz", ".tar", ".jar", ".class", ".o", ".so", ".dylib", ".dll",
+    ".exe", ".bin", ".woff", ".woff2", ".ttf", ".eot", ".mp4", ".mov",
+    ".mp3", ".lock", ".map",
 }
-
-IMPORT_RE = re.compile(
-    r"^\s*(?:import|from|require|use|include|using)\b.*", re.MULTILINE)
-CLASS_RE = re.compile(r"^\s*(?:class|interface|trait|struct)\s+([A-Za-z_]\w*)",
-                      re.MULTILINE)
-FUNC_RE = re.compile(
-    r"^\s*(?:def|func|function|fn|public|private|protected|static)?\s*"
-    r"(?:function\s+)?([A-Za-z_]\w*)\s*\(", re.MULTILINE)
-ROUTE_RE = re.compile(
-    r"""(?:get|post|put|patch|delete|route|Route|@app\.route|@router\.)\s*"""
-    r"""[\(\.]?\s*['"`]([^'"`]+)['"`]""")
-TABLE_RE = re.compile(
-    r"""(?:create_table|table_name|@Table|from\s+|join\s+|into\s+)\s*"""
-    r"""['"`]?([a-z][a-z0-9_]{2,})['"`]?""", re.IGNORECASE)
+MAX_LINE_COUNT_BYTES = 2_000_000  # don't read huge files just to count lines
 
 
-def _categorize(path: Path) -> list[str]:
-    """Heuristic role tags from path segments and filename."""
-    parts = [p.lower() for p in path.parts]
-    name = path.stem.lower()
-    tags: list[str] = []
-
-    def has(*words):
-        return any(w in p for p in parts for w in words)
-
-    if has("controller") or name.endswith("controller"):
-        tags.append("controller")
-    if has("model", "models", "entity", "entities") or name.endswith("model"):
-        tags.append("model")
-    if has("migration", "migrations") or re.match(r"\d{6,}", name):
-        tags.append("migration")
-    if has("view", "views", "template", "templates", "page", "pages",
-           "screen", "component", "components"):
-        tags.append("view")
-    if has("route", "routes", "router", "urls"):
-        tags.append("route")
-    if has("job", "jobs", "task", "tasks", "batch", "worker", "command",
-           "commands", "cron"):
-        tags.append("job")
-    if path.suffix == ".sql":
-        tags.append("sql")
-    return tags
-
-
-def analyze_file(path: Path, repo_root: Path) -> dict | None:
+def _line_count(path: Path) -> int | None:
     try:
-        text = path.read_text(encoding="utf-8", errors="replace")
-    except (OSError, UnicodeError):
+        if path.stat().st_size > MAX_LINE_COUNT_BYTES:
+            return None
+        with open(path, "rb") as fh:
+            return fh.read().count(b"\n") + 1
+    except OSError:
         return None
-    rel = str(path.relative_to(repo_root))
-    classes = CLASS_RE.findall(text)
-    funcs = FUNC_RE.findall(text)
-    # Drop common keyword false positives from the function regex.
-    funcs = [f for f in funcs if f not in {
-        "if", "for", "while", "switch", "catch", "return", "function"}]
-    return {
-        "path": rel,
-        "ext": path.suffix,
-        "lines": text.count("\n") + 1,
-        "roles": _categorize(path),
-        "imports": IMPORT_RE.findall(text)[:50],
-        "classes": sorted(set(classes))[:50],
-        "functions": sorted(set(funcs))[:80],
-        "routes": sorted(set(ROUTE_RE.findall(text)))[:50],
-        "table_hints": sorted(set(TABLE_RE.findall(text)))[:50],
-    }
 
 
 def analyze_repo(repo_root: str) -> dict:
     root = Path(repo_root).resolve()
     files: list[dict] = []
     total_lines = 0
+    ext_counts: dict[str, int] = defaultdict(int)
+    # Aggregate by top two directory levels so Claude can see where mass sits.
+    dir_lines: dict[str, int] = defaultdict(int)
+    dir_files: dict[str, int] = defaultdict(int)
+
     for path in sorted(root.rglob("*")):
         if path.is_dir():
             continue
-        if any(part in SKIP_DIRS for part in path.parts):
+        if any(part in SKIP_DIRS for part in path.relative_to(root).parts):
             continue
-        if path.suffix not in CODE_EXTS:
+        if path.suffix.lower() in SKIP_EXTS:
             continue
-        info = analyze_file(path, root)
-        if info is None:
-            continue
+        rel = str(path.relative_to(root))
+        lines = _line_count(path)
+        info = {"path": rel, "ext": path.suffix, "lines": lines}
         files.append(info)
-        total_lines += info["lines"]
+        if lines:
+            total_lines += lines
+        ext_counts[path.suffix] += 1
+        parts = PurePosixPath(rel).parts
+        bucket = "/".join(parts[:2]) if len(parts) > 1 else "."
+        dir_files[bucket] += 1
+        if lines:
+            dir_lines[bucket] += lines
 
-    # Aggregate role buckets for quick downstream consumption.
-    by_role: dict[str, list[str]] = {}
-    for f in files:
-        for role in f["roles"]:
-            by_role.setdefault(role, []).append(f["path"])
-
-    ext_counts: dict[str, int] = {}
-    for f in files:
-        ext_counts[f["ext"]] = ext_counts.get(f["ext"], 0) + 1
+    directories = sorted(
+        ({"dir": d, "files": dir_files[d], "lines": dir_lines.get(d, 0)}
+         for d in dir_files),
+        key=lambda x: -x["lines"],
+    )
 
     return {
         "repo_root": str(root),
         "summary": {
             "files": len(files),
             "lines": total_lines,
-            "by_ext": dict(sorted(ext_counts.items(),
-                                  key=lambda kv: -kv[1])),
-            "by_role": {k: len(v) for k, v in sorted(by_role.items())},
+            "by_ext": dict(sorted(ext_counts.items(), key=lambda kv: -kv[1])),
         },
-        "by_role": by_role,
+        "directories": directories,
         "files": files,
     }
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Index repository source")
+    parser = argparse.ArgumentParser(
+        description="Index repository files (no semantic extraction)")
     add_lang_args(parser, content=False)
     parser.add_argument("--out", default=None)
     args = parser.parse_args(argv)

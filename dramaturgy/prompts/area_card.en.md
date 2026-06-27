@@ -10,6 +10,13 @@ The goal is not to write a detailed specification.
 A human should be able to grasp the meaning of this area quickly and, when
 needed, drill down into the code, database, and APIs.
 
+As Claude Code, you can read the target repository's files directly. The
+analysis pack below is **a list of files likely related to this area** (tables
+and APIs are NOT pre-extracted). **Open and read the listed files** to confirm
+the tables/entities, APIs, screens, flows, and state transitions. Tables are
+not necessarily SQL — they may be defined in ORM models, migrations, or
+framework conventions, so judge from the file contents.
+
 Always organize the following:
 
 - Area name

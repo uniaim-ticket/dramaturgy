@@ -130,11 +130,19 @@ def stream_claude(
     except OSError as exc:
         return False, f"failed to start claude: {exc}"
 
+    # Record the subprocess pid so the UI can show it's alive (CPU/RSS).
+    job.set_pid(getattr(proc, "pid", None))
+
     saw_result = False
+    result_error: str | None = None
+    seen_api_error = False
     for raw in proc.stdout:  # type: ignore[union-attr]
+        job.beat()  # heartbeat: we received output, the session is alive
         line = raw.rstrip("\n")
         if not line:
             continue
+        if "API Error" in line or "Overloaded" in line:
+            seen_api_error = True
         try:
             event = json.loads(line)
         except json.JSONDecodeError:
@@ -148,16 +156,76 @@ def stream_claude(
                 event.get("result") or event.get("subtype") or "")[:500]
             if event.get("session_id"):
                 job.session_id = event["session_id"]
+            if event.get("is_error") or event.get("subtype") not in (
+                    None, "success"):
+                result_error = (event.get("result")
+                                or event.get("subtype") or "error")[:300]
         summary = _summarize_event(event)
         if summary:
             job.append_progress(summary)
 
     code = proc.wait()
+    job.set_pid(None)  # subprocess has exited
+    if result_error:
+        return False, result_error
     if code != 0:
-        return False, f"claude exited with code {code}"
+        # An API error often surfaces only as a non-zero exit.
+        hint = " (API error)" if seen_api_error else ""
+        return False, f"claude exited with code {code}{hint}"
     if not saw_result:
         return False, "claude ended without a result event"
     return True, None
+
+
+# Substrings that mark a transient, retryable failure (vs. a real error).
+TRANSIENT_MARKERS = (
+    "api error", "overloaded", "rate limit", "timeout", "timed out",
+    "503", "502", "529", "connection", "unexpected error",
+)
+
+
+def _is_transient(error: str | None) -> bool:
+    if not error:
+        return False
+    low = error.lower()
+    return any(m in low for m in TRANSIENT_MARKERS)
+
+
+def stream_claude_with_retry(
+    job: Job,
+    prompt: str,
+    repo_root: str,
+    *,
+    max_attempts: int = 3,
+    sleep: Callable[[float], None] | None = None,
+    **kwargs,
+) -> tuple[bool, str | None]:
+    """stream_claude with backoff on transient API errors.
+
+    Resumes the same session between attempts when possible, so a retry
+    continues rather than restarting. Non-transient errors fail immediately.
+    """
+    import time
+    sleep = sleep or time.sleep
+    resume = kwargs.pop("resume_session", None)
+    last_error: str | None = None
+    for attempt in range(1, max_attempts + 1):
+        ok, error = stream_claude(
+            job, prompt, repo_root, resume_session=resume, **kwargs)
+        if ok:
+            return True, None
+        last_error = error
+        # Prefer resuming the session that was established, if any.
+        resume = job.session_id or resume
+        if attempt < max_attempts and _is_transient(error):
+            backoff = 2.0 * attempt
+            job.append_progress(
+                f"transient error (attempt {attempt}/{max_attempts}): "
+                f"{error} — retrying in {backoff:.0f}s")
+            sleep(backoff)
+            continue
+        break
+    return False, last_error
 
 
 def run_job(
@@ -172,12 +240,11 @@ def run_job(
 ) -> None:
     """Run one single-invocation job to completion (blocking, for a thread).
 
-    Updates the job's status/progress/session_id in place. stream-json lines
-    are parsed for progress; non-JSON lines are recorded verbatim so nothing
-    is silently dropped.
+    Retries transient API errors. Updates the job's status/progress/session_id
+    in place.
     """
     job.set_status("running")
-    ok, error = stream_claude(
+    ok, error = stream_claude_with_retry(
         job, job.prompt, repo_root,
         claude_bin=claude_bin, permission_mode=permission_mode,
         resume_session=resume_session, extra_args=extra_args, spawn=spawn)

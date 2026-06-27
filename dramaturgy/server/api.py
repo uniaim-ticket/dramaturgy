@@ -17,8 +17,6 @@ from typing import Any, Callable
 from ..common.config import Config, load_config, save_config
 from ..common.paths import ensure_workspace, read_json, workspace_dir, write_json
 from ..commands.analyze_repo import analyze_repo as run_analyze_repo
-from ..commands.analyze_schema import parse_schema
-from ..commands.propose_area_candidates import build_candidates
 from ..commands.merge_maps import merge as merge_maps
 from ..commands.render_html import render_html
 from ..commands.validate_map import Report, validate as run_validate
@@ -81,8 +79,6 @@ class Api:
             "repo_root": self.repo_root,
             "config": self._config().to_dict(),
             "source_index": exists("source-index.json"),
-            "schema_index": exists("schema-index.json"),
-            "area_candidates": exists("area-candidates.json"),
             "area_tree": exists("area-tree.json"),
             "meaning_map": exists("meaning-map.json"),
             "area_maps": area_maps,
@@ -90,32 +86,14 @@ class Api:
 
     # ---- mechanical analysis (no Claude) -------------------------------
     def analyze(self, body: dict | None = None):
-        body = body or {}
+        """Inventory files/directories only. Tables/entities/APIs are NOT
+        extracted here — Claude discovers those by reading the source."""
         index = run_analyze_repo(self.repo_root)
         write_json(self.ws / "source-index.json", index)
-
-        # Schema is optional: take an explicit list or scan for *.sql.
-        schema_files = body.get("schema_files")
-        if schema_files is None:
-            schema_files = [str(p) for p in Path(self.repo_root).rglob("*.sql")
-                            if ".dramaturgy" not in p.parts]
-        schema_index = None
-        if schema_files:
-            sql = "\n".join(
-                Path(p).read_text(encoding="utf-8", errors="replace")
-                for p in schema_files if Path(p).exists())
-            schema_index = {"sources": schema_files,
-                            "summary": {"tables": 0},
-                            "tables": parse_schema(sql)}
-            schema_index["summary"]["tables"] = len(schema_index["tables"])
-            write_json(self.ws / "schema-index.json", schema_index)
-
-        candidates = build_candidates(index, schema_index or {"tables": []})
-        write_json(self.ws / "area-candidates.json", candidates)
         return 200, {
             "files": index["summary"]["files"],
             "lines": index["summary"]["lines"],
-            "tables": (schema_index or {}).get("summary", {}).get("tables", 0),
+            "directories": len(index.get("directories", [])),
         }
 
     # ---- canonical JSON read/write (write-back) ------------------------
@@ -168,10 +146,9 @@ class Api:
         if mm is None:
             return 404, {"error": "meaning-map.json not found"}
         source_index = self._read_optional("source-index.json") or {"files": []}
-        schema_index = self._read_optional("schema-index.json")
         cfg = self._config()
         report = Report(Catalog(cfg.ui_lang, domain="cli"))
-        run_validate(mm, source_index, schema_index, cfg, self.repo_root, report)
+        run_validate(mm, source_index, cfg, self.repo_root, report)
         ok = not report.errors
         return 200, {"ok": ok, "errors": report.errors,
                      "warnings": report.warnings}
@@ -260,37 +237,57 @@ class Api:
             job.append_progress("[1/6] analyze repository")
             res = self.analyze({})[1]
             job.append_progress(
-                f"      files={res['files']} tables={res['tables']}")
+                f"      files={res['files']} lines={res['lines']}")
 
-            # 2. area tree (Claude)
+            # 2. area tree (Claude, with retry on transient errors)
             job.append_progress("[2/6] generate area tree with Claude")
             prompt = area_tree_prompt(
                 self.repo_root, cfg.content_lang, cfg.project_name)
-            ok, err = claude_runner.stream_claude(
+            ok, err = claude_runner.stream_claude_with_retry(
                 job, prompt, self.repo_root,
                 claude_bin=self.claude_bin, spawn=self.spawn)
             if not ok:
+                # The tree is a hard prerequisite — without it there is
+                # nothing to card. Stop, but leave the job re-runnable.
                 return self._fail(job, f"area tree: {err}")
             tree = self._read_optional("area-tree.json")
             if not tree or not tree.get("areas"):
                 return self._fail(job, "area-tree.json missing or has no areas")
 
-            # 3. area cards (Claude, one invocation per area, resumed)
+            # 3. area cards (Claude). A card that fails (e.g. a transient API
+            # error that survives retries) is recorded and SKIPPED — the run
+            # continues so the user still gets a partial map and can
+            # regenerate the failed areas individually afterwards.
             areas = tree.get("areas", [])
             job.append_progress(f"[3/6] generate {len(areas)} area cards")
+            failed: list[str] = []
             for i, area in enumerate(areas, 1):
                 area_id = area.get("id")
                 job.append_progress(f"      ({i}/{len(areas)}) {area_id}")
-                card_prompt = area_card_prompt(
-                    self.repo_root, cfg.content_lang, area_id)
-                ok, err = claude_runner.stream_claude(
+                try:
+                    card_prompt = area_card_prompt(
+                        self.repo_root, cfg.content_lang, area_id)
+                except (FileNotFoundError, KeyError) as exc:
+                    failed.append(area_id)
+                    job.append_progress(f"      ! skipped {area_id}: {exc}")
+                    continue
+                ok, err = claude_runner.stream_claude_with_retry(
                     job, card_prompt, self.repo_root,
                     claude_bin=self.claude_bin, spawn=self.spawn,
                     resume_session=job.session_id)
                 if not ok:
-                    return self._fail(job, f"area card {area_id}: {err}")
+                    failed.append(area_id)
+                    job.append_progress(
+                        f"      ! failed {area_id}: {err} — continuing")
 
-            # 4-6. merge / validate / render (mechanical)
+            # 4-6. merge / validate / render whatever cards we have.
+            produced = [p.stem for p in (self.ws / "area-maps").glob("*.json")] \
+                if (self.ws / "area-maps").exists() else []
+            if not produced:
+                return self._fail(
+                    job, "no area cards were produced; "
+                         f"all {len(areas)} areas failed: {failed}")
+
             job.append_progress("[4/6] merge area cards")
             code, merged = self.merge({})
             if code != 200:
@@ -305,8 +302,18 @@ class Api:
                 f"warnings={len(v['warnings'])}")
             job.append_progress("[6/6] render HTML")
             self.render()
+
+            if failed:
+                job.append_progress(
+                    f"NOTE: {len(failed)} area(s) failed and were skipped: "
+                    f"{', '.join(failed)}. Regenerate them individually.")
+                job.meta["failed_areas"] = failed
             job.result_summary = (
-                f"initialized: {len(areas)} areas, validate ok={v['ok']}")
+                f"initialized: {len(produced)}/{len(areas)} areas, "
+                f"validate ok={v['ok']}"
+                + (f", {len(failed)} failed" if failed else ""))
+            # A partial run still 'done' (the user has a usable map); the
+            # failed list is surfaced in progress + meta for follow-up.
             job.set_status("done")
         except (FileNotFoundError, KeyError, ValueError) as exc:
             self._fail(job, str(exc))

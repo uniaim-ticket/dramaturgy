@@ -115,12 +115,17 @@ dra serve --repo-root /path/to/target      # opens http://127.0.0.1:5178/app/
 
 In the browser, the fastest path is **Initialize all with Claude** at the top:
 it runs the whole pipeline as one job — analyze → area tree → area cards →
-merge → validate → render — and reports progress live. When it finishes you
-stay in the same session and adjust any step individually.
+merge → validate → render — and reports progress live (elapsed time, the
+Claude process id, and its CPU/memory, so you can see the session is alive).
+Transient Claude API errors are retried; an area that still fails is skipped
+and reported so the run finishes with a partial map you can complete later.
+When it finishes you stay in the same session and adjust any step
+individually.
 
 Or step through manually:
 
-1. **Analyze** — index the repo (mechanical, no Claude).
+1. **Analyze** — inventory the repo's files and directories (mechanical, no
+   Claude; no table/route guessing).
 2. **Area tree** — *Generate with Claude*: Claude writes `area-tree.json`.
    You can edit the JSON inline and save it back.
 3. **Area cards** — per area, *Generate with Claude*: Claude writes each
@@ -135,9 +140,9 @@ With this repo's `.claude/commands/` available, run in a Claude Code session
 opened on your target repository:
 
 ```
-/dramaturgy:analyze        # index repo (runs dra analyze-* + candidates)
-/dramaturgy:tree           # Claude builds .dramaturgy/area-tree.json
-/dramaturgy:cards [id]     # Claude writes area-maps/<id>.json (all if omitted)
+/dramaturgy:analyze        # inventory repo files/dirs (no semantic extraction)
+/dramaturgy:tree           # Claude reads the source, builds area-tree.json
+/dramaturgy:cards [id]     # Claude reads the files, writes area-maps/<id>.json
 /dramaturgy:finalize       # merge + validate + render
 ```
 
@@ -150,11 +155,9 @@ the web UI and slash commands call; they're exposed for scripting too.
 | --- | --- |
 | `dra setup` | Write `.dramaturgy/config.json` (languages + project) |
 | `dra serve` | Start the web UI; drives Claude Code and writes edits back |
-| `dra analyze-repo` | Index source files, roles, routes, table hints |
-| `dra analyze-schema` | Parse SQL DDL into tables / FKs / status columns |
-| `dra candidates` | Grouping material (dirs, FK graph, API prefixes) |
+| `dra analyze-repo` | Inventory files/dirs only (paths, line counts) — no semantic extraction |
 | `dra tree-prompt` | Render the `content_lang` area-tree prompt |
-| `dra pack` | Gather one area's files/tables/APIs; warn if too large |
+| `dra pack` | List one area's files for Claude to read; warn if too large |
 | `dra subdivide` | Propose natural sub-areas (never auto-splits) |
 | `dra merge` | Merge per-area maps; detect dup ids / drift / orphans |
 | `dra validate` | Mechanical consistency + language invariants |
@@ -162,9 +165,11 @@ the web UI and slash commands call; they're exposed for scripting too.
 
 ## Principles
 
-- Scripts collect material and run mechanical checks; **Claude makes meaning
-  judgments.** Oversized areas yield a *suggested* subdivision, never an
-  automatic split.
+- Mechanical steps gather only **reliable facts** (the file/directory
+  inventory). They do **not** guess tables, entities, routes, or roles —
+  those depend on the framework/ORM and are discovered by **Claude reading
+  the actual source**. Oversized areas yield a *suggested* subdivision, never
+  an automatic split.
 - The canonical sources are the JSON files; HTML is a generated view, and
   edits in the UI are written back to JSON. Intermediate JSON is
   pretty-printed UTF-8 for reviewable Git diffs.

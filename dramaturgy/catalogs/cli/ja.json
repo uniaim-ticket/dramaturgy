@@ -18,13 +18,6 @@
   "analyze_repo.start": "リポジトリを解析しています: {root}",
   "analyze_repo.counted": "ファイル {files} 件、{lines} 行を索引しました。",
 
-  "analyze_schema.start": "DBスキーマを解析しています。",
-  "analyze_schema.no_input": "スキーマ入力が見つかりません。--schema でSQL/DDLファイルを指定してください。",
-  "analyze_schema.counted": "テーブル {tables} 件を抽出しました。",
-
-  "candidates.start": "領域候補を計測しています。",
-  "candidates.done": "候補材料を出力しました。",
-
   "prompt.start": "領域ツリー作成プロンプトを生成しています（content_lang={content_lang}）。",
   "prompt.missing_template": "プロンプトテンプレートが見つかりません: {path}",
 
@@ -44,8 +37,6 @@
   "validate.ok": "検査に合格しました（エラー {errors} / 警告 {warnings}）。",
   "validate.failed": "検査で問題が見つかりました（エラー {errors} / 警告 {warnings}）。",
   "validate.missing_file": "参照先ファイルが存在しません: {ref}",
-  "validate.unknown_table": "schema-index に存在しないテーブル: {name}",
-  "validate.unknown_api": "source-index に存在しないAPI: {name}",
   "validate.unknown_concept": "concepts に存在しない概念: {name}",
   "validate.parent_child_mismatch": "親子関係が不整合です: {detail}",
   "validate.unknown_related": "存在しない related_area_id: {id}",

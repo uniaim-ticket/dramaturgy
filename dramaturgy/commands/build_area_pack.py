@@ -1,17 +1,13 @@
 #!/usr/bin/env python3
-"""build_area_pack.py — assemble the analysis pack for one area.
+"""build_area_pack — assemble the file list for one area, for Claude to read.
 
-Requires an existing ``area-tree.json``. For the requested ``--area-id``,
-gathers the related files, tables, and APIs (via the area's source_hints),
-estimates token size, and warns — but never automatically splits — when the
-pack exceeds the limit. Output is a Markdown pack written for Claude.
+Requires an existing ``area-tree.json``. For the requested ``--area-id`` it
+collects the files whose paths match the area's hints, so Claude knows which
+files to open. It does NOT pre-extract tables/APIs/entities — Claude reads
+the listed files to discover those. Warns (never auto-splits) when the listed
+files are large enough that the area may be worth subdividing.
 
-    python tools/meaning_map/build_area_pack.py \
-      --area-id ticket_sales.application \
-      --area-tree .dramaturgy/area-tree.json \
-      --source-index .dramaturgy/source-index.json \
-      --schema-index .dramaturgy/schema-index.json \
-      --out .dramaturgy/area-packs/ticket_sales.application.md
+    dra pack --area-id ticket_sales.application
 """
 
 from __future__ import annotations
@@ -20,20 +16,18 @@ import argparse
 import json
 from pathlib import Path
 
+from ..common.area_match import estimate_tokens, find_area, match_files
+from ..common.config import add_lang_args, resolve
+from ..common.paths import read_json, workspace_dir
 
-from ..common.area_match import (  # noqa: E402
-    estimate_tokens, find_area, match_apis, match_files, match_tables,
-)
-from ..common.config import add_lang_args, resolve  # noqa: E402
-from ..common.paths import read_json, workspace_dir  # noqa: E402
-
+# A rough size guard: if the matched files are this large (in estimated
+# tokens), suggest the area may need subdividing. Reading is Claude's call.
 DEFAULT_TOKEN_LIMIT = 100_000
 
 
-def build_pack(area: dict, source_index: dict, schema_index: dict | None) -> dict:
+def build_pack(area: dict, source_index: dict) -> dict:
     files = match_files(area, source_index)
-    tables = match_tables(area, schema_index)
-    apis = match_apis(area, source_index)
+    total_lines = sum(f.get("lines") or 0 for f in files)
     return {
         "area": {
             "id": area.get("id"),
@@ -42,15 +36,16 @@ def build_pack(area: dict, source_index: dict, schema_index: dict | None) -> dic
             "purpose": area.get("purpose"),
             "primary_actors": area.get("primary_actors", []),
             "primary_concepts": area.get("primary_concepts", []),
+            "source_hints": area.get("source_hints", {}),
         },
+        "instructions": (
+            "Open and read the files listed below to discover the area's "
+            "tables/entities, APIs, screens, flows, and state transitions. "
+            "Do not rely on file paths alone; the definitions may live in "
+            "ORM models, migrations, or framework conventions."
+        ),
         "files": files,
-        "tables": tables,
-        "apis": apis,
-        "counts": {
-            "files": len(files),
-            "tables": len(tables),
-            "apis": len(apis),
-        },
+        "counts": {"files": len(files), "lines": total_lines},
     }
 
 
@@ -62,12 +57,11 @@ def render_markdown(pack: dict) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Build an area analysis pack")
+    parser = argparse.ArgumentParser(description="Build an area file pack")
     add_lang_args(parser)
     parser.add_argument("--area-id", required=True)
     parser.add_argument("--area-tree", default=None)
     parser.add_argument("--source-index", default=None)
-    parser.add_argument("--schema-index", default=None)
     parser.add_argument("--out", default=None)
     parser.add_argument("--token-limit", type=int, default=DEFAULT_TOKEN_LIMIT)
     args = parser.parse_args(argv)
@@ -83,12 +77,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     source_index = read_json(args.source_index or ws / "source-index.json")
-    try:
-        schema_index = read_json(args.schema_index or ws / "schema-index.json")
-    except FileNotFoundError:
-        schema_index = None
-
-    pack = build_pack(area, source_index, schema_index)
+    pack = build_pack(area, source_index)
     tokens = estimate_tokens(pack)
     print(rs.ui.t("pack.estimate", tokens=tokens))
     if tokens > args.token_limit:

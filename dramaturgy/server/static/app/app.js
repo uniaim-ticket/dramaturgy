@@ -226,6 +226,18 @@ async function submitFinding() {
 // ---- finding queue -----------------------------------------------------
 const KIND_CLASS = { reframe: "k-reframe", audit: "k-audit", proposal: "k-proposal" };
 let RV_REFRESH = null;   // periodic refresh timer while the queue is active
+let RV_SIG = null;       // signature of the rendered list, to avoid redraws
+
+// Card content that, when unchanged, means we must NOT rebuild the list —
+// otherwise the periodic refresh would wipe the live progress element that
+// pollJob writes into (causing the flicker). Live progress text is handled
+// by pollJob separately, so it is deliberately excluded here.
+function findingsSignature(findings) {
+  return JSON.stringify(findings.map((f) => [
+    f.id, f.status, f.result || "", f.job_id || "",
+    f.audit_result ? 1 : 0, f.proposal_ref || "",
+  ]));
+}
 
 async function loadFindings() {
   const { status, data } = await api("GET", "/api/review/findings");
@@ -233,11 +245,18 @@ async function loadFindings() {
   const empty = document.getElementById("queue-empty");
   const hasMap = STATE && STATE.meaning_map;
   empty.textContent = hasMap ? t("rv.no_findings") : t("rv.no_map");
-  if (status !== 200) { list.innerHTML = ""; empty.hidden = false; return; }
+  if (status !== 200) { list.innerHTML = ""; RV_SIG = null; empty.hidden = false; return; }
   const findings = data.findings || [];
-  list.innerHTML = "";
   empty.hidden = findings.length > 0;
-  findings.forEach((f) => list.appendChild(findingCard(f)));
+
+  // Only rebuild when something actually changed; otherwise leave the DOM
+  // (and pollJob's in-flight progress writes) untouched.
+  const sig = findingsSignature(findings);
+  if (sig !== RV_SIG) {
+    RV_SIG = sig;
+    list.innerHTML = "";
+    findings.forEach((f) => list.appendChild(findingCard(f)));
+  }
 
   // Runs happen automatically on the server. While anything is still
   // open/running, re-poll the list so the UI tracks the worker's progress.

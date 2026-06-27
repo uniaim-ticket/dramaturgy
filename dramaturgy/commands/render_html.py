@@ -596,11 +596,11 @@ def render_html(mm: dict, ui_lang: str) -> str:
         lang_note = (f'<div class="meta">'
                      f'{e(cat.t("note.content_lang", content_lang=content_lang))}</div>')
 
-    # Actors first: that is the usual entry point for review.
+    # Business areas first: most natural entry point for a general reader.
     nav_items = [
+        ("areas", "nav.areas"), ("crud", "nav.crud"),
         ("actors", "nav.actors"), ("concepts", "nav.concepts"),
         ("classifications", "nav.classifications"),
-        ("areas", "nav.areas"), ("crud", "nav.crud"),
         ("components", "nav.components"),
         ("dev", "nav.dev"), ("validation", "nav.validation"),
     ]
@@ -614,16 +614,16 @@ def render_html(mm: dict, ui_lang: str) -> str:
     actor_map = {a["id"]: a for a in mm.get("actors", [])}
 
     sections = [
+        f'<section id="areas"><h2>{e(cat.t("nav.areas"))}</h2>'
+        f'{render_areas(cat, areas, concept_map, actor_map)}</section>',
+        f'<section id="crud"><h2>{e(cat.t("nav.crud"))}</h2>'
+        f'{render_crud(cat, areas, concepts)}</section>',
         f'<section id="actors"><h2>{e(cat.t("nav.actors"))}</h2>'
         f'{render_actors(cat, mm.get("actors", []))}</section>',
         f'<section id="concepts"><h2>{e(cat.t("nav.concepts"))}</h2>'
         f'{render_concept_tables(cat, concepts, area_map)}</section>',
         f'<section id="classifications"><h2>{e(cat.t("nav.classifications"))}</h2>'
         f'{render_classifications(cat, mm.get("classifications", []), concept_map)}</section>',
-        f'<section id="areas"><h2>{e(cat.t("nav.areas"))}</h2>'
-        f'{render_areas(cat, areas, concept_map, actor_map)}</section>',
-        f'<section id="crud"><h2>{e(cat.t("nav.crud"))}</h2>'
-        f'{render_crud(cat, areas, concepts)}</section>',
         f'<section id="components"><h2>{e(cat.t("nav.components"))}</h2>'
         f'{render_components(cat, mm.get("components", []))}</section>',
         f'<section id="dev"><h2>{e(cat.t("nav.dev"))}</h2>'

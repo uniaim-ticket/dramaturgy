@@ -314,6 +314,13 @@ def render_crud(cat: Catalog, areas: list, concepts: list) -> str:
     area_map = {a["id"]: a for a in areas}
     concept_map = {c["id"]: c for c in concepts}
 
+    # A CRUD cell is an area×concept pairing; scope a finding to the area
+    # with a crud:<concept_id> field (matching the per-area CRUD pins).
+    def crud_pin(area, cid):
+        cname = _concept_name(concept_map, cid)
+        return pin("area", area.get("id"), area.get("name"),
+                   "crud:" + str(cid), f"CRUD / {cname}")
+
     # By area: flat table area | concept | CRUD.
     flat_area = ""
     for area in areas:
@@ -321,7 +328,8 @@ def render_crud(cat: Catalog, areas: list, concepts: list) -> str:
             cid = entry.get("concept_id")
             flat_area += (f"<tr><td>{e(area.get('name'))}</td>"
                           f"<td>{e(_concept_name(concept_map, cid))}</td>"
-                          f"<td>{crud_cells(entry.get('ops', ''))}</td></tr>")
+                          f"<td>{crud_cells(entry.get('ops', ''))}"
+                          f"{crud_pin(area, cid)}</td></tr>")
     by_area = (
         f"<table><tr><th>{e(cat.t('nav.areas'))}</th>"
         f"<th>{e(cat.t('label.concept_table'))}</th><th>CRUD</th></tr>"
@@ -333,9 +341,11 @@ def render_crud(cat: Catalog, areas: list, concepts: list) -> str:
     for c in concepts:
         for entry in c.get("crud_by_area", []) or []:
             aid = entry.get("area_id")
+            area = area_map.get(aid, {"id": aid, "name": _area_name(area_map, aid)})
             flat_concept += (f"<tr><td>{e(c.get('name'))}</td>"
                              f"<td>{e(_area_name(area_map, aid))}</td>"
-                             f"<td>{crud_cells(entry.get('ops', ''))}</td></tr>")
+                             f"<td>{crud_cells(entry.get('ops', ''))}"
+                             f"{crud_pin(area, c.get('id'))}</td></tr>")
     by_concept = (
         f"<table><tr><th>{e(cat.t('label.concept_table'))}</th>"
         f"<th>{e(cat.t('nav.areas'))}</th><th>CRUD</th></tr>"

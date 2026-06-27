@@ -407,6 +407,13 @@ class HttpTests(unittest.TestCase):
 class ReviewTests(unittest.TestCase):
     def _api_with_map(self, d):
         api = Api(d)
+        # Default to a harmless spawn so the auto-run worker never invokes a
+        # real `claude`; individual tests override api.spawn before creating
+        # findings when they care about the run's effect.
+        def _noop_spawn(argv):
+            return _FakeProc([json.dumps({"type": "result", "is_error": False,
+                                          "subtype": "success", "result": "ok"})], [])
+        api.spawn = _noop_spawn
         mm = {"content_lang": "ja",
               "system": {"name": "S", "source_summary": {}},
               "actors": [{"id": "user", "name": "利用者", "actions": []}],
@@ -419,15 +426,16 @@ class ReviewTests(unittest.TestCase):
         api.put_artifact("meaning-map.json", mm)
         return api
 
-    def _run(self, api, fid):
-        status, res = api.run_finding(fid, {"continue_session": False})
-        self.assertEqual(status, 202)
-        for _ in range(100):
-            job = api.get_job(res["job_id"])[1]
-            if job["status"] in ("done", "error", "aborted"):
-                break
+    def _wait(self, api, fid):
+        """Findings auto-run on creation; wait for this one to finish and
+        return its stored record."""
+        for _ in range(200):
+            f = next((x for x in api.list_findings()[1]["findings"]
+                      if x["id"] == fid), None)
+            if f and f["status"] in ("done", "error"):
+                return f
             time.sleep(0.02)
-        return job
+        return next(x for x in api.list_findings()[1]["findings"] if x["id"] == fid)
 
     def test_create_validates_and_lists(self):
         with tempfile.TemporaryDirectory() as d:
@@ -441,6 +449,8 @@ class ReviewTests(unittest.TestCase):
                 "kind": "reframe", "comment": "来場者として捉え直す"})
             self.assertEqual(st, 201)
             self.assertEqual(api.list_findings()[1]["findings"][0]["id"], f["id"])
+            # It auto-runs; wait so the worker isn't writing during cleanup.
+            self._wait(api, f["id"])
 
     def test_reframe_edits_canonical_map(self):
         with tempfile.TemporaryDirectory() as d:
@@ -461,12 +471,10 @@ class ReviewTests(unittest.TestCase):
             _, f = api.create_finding({"target_type": "actor",
                                        "target_id": "user", "kind": "reframe",
                                        "comment": "来場者へ"})
-            job = self._run(api, f["id"])
-            self.assertEqual(job["status"], "done")
+            stored = self._wait(api, f["id"])
+            self.assertEqual(stored["status"], "done")
             mm = api.get_artifact("meaning-map.json")[1]
             self.assertEqual(mm["actors"][0]["name"], "来場者")
-            stored = api.list_findings()[1]["findings"][0]
-            self.assertEqual(stored["status"], "done")
             self.assertEqual(stored["session_id"], "rev1")
 
     def test_audit_writes_result_without_changing_map(self):
@@ -492,11 +500,10 @@ class ReviewTests(unittest.TestCase):
             _, f = api.create_finding({"target_type": "concept",
                                        "target_id": "order", "kind": "audit",
                                        "comment": "キャンセルは説明できる?"})
-            job = self._run(api, f["id"])
-            self.assertEqual(job["status"], "done")
+            stored = self._wait(api, f["id"])
+            self.assertEqual(stored["status"], "done")
             # Canonical map unchanged.
             self.assertEqual((ws / "meaning-map.json").read_text(), before)
-            stored = api.list_findings()[1]["findings"][0]
             self.assertEqual(stored["audit_result"]["verdict"], "unclear")
 
     def test_proposal_writes_separate_file(self):
@@ -515,11 +522,41 @@ class ReviewTests(unittest.TestCase):
             _, f = api.create_finding({"target_type": "area",
                                        "target_id": "sales", "kind": "proposal",
                                        "comment": "サブスク販売を追加"})
-            job = self._run(api, f["id"])
-            self.assertEqual(job["status"], "done")
-            stored = api.list_findings()[1]["findings"][0]
+            stored = self._wait(api, f["id"])
+            self.assertEqual(stored["status"], "done")
             self.assertTrue(stored["proposal_ref"])
             self.assertTrue(Path(stored["proposal_ref"]).exists())
+
+    def test_queue_autoruns_in_order(self):
+        # Adding findings auto-runs them, one at a time, without any run call.
+        with tempfile.TemporaryDirectory() as d:
+            api = self._api_with_map(d)
+            order = []
+
+            def spawn(argv):
+                prompt = argv[argv.index("-p") + 1]
+                order.append(prompt)
+                lines = [json.dumps({"type": "system", "subtype": "init",
+                                     "session_id": "s1"}),
+                         json.dumps({"type": "result", "is_error": False,
+                                     "subtype": "success", "result": "ok",
+                                     "session_id": "s1"})]
+                return _FakeProc(lines, [])
+            api.spawn = spawn
+
+            fids = []
+            for i in range(3):
+                _, f = api.create_finding({
+                    "target_type": "actor", "target_id": "user",
+                    "kind": "audit", "comment": f"c{i}"})
+                fids.append(f["id"])
+
+            for fid in fids:
+                self.assertEqual(self._wait(api, fid)["status"], "done")
+            # All three ran automatically, each got a job id recorded.
+            self.assertEqual(len(order), 3)
+            for f in api.list_findings()[1]["findings"]:
+                self.assertTrue(f["job_id"])
 
 
 class TagTests(unittest.TestCase):

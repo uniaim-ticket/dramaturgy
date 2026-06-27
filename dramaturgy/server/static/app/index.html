@@ -38,9 +38,7 @@
   <aside id="queue">
     <div class="queue-head">
       <h2 data-i="rv.queue">Findings</h2>
-      <div class="row">
-        <button id="rv-run-all" class="primary" data-i="rv.run_all">Run queued</button>
-      </div>
+      <p class="muted tiny" data-i="rv.autorun_hint">Findings run automatically, in order.</p>
       <label class="tiny"><input type="checkbox" id="rv-continue"> <span data-i="rv.continue_session">continue Claude session</span></label>
       <p class="muted tiny" id="queue-empty" data-i="rv.no_map"></p>
     </div>
@@ -66,7 +64,6 @@
   <textarea id="rv-comment" rows="3" placeholder="…"></textarea>
   <div class="row">
     <button id="rv-add" class="primary" data-i="rv.add">Add to queue</button>
-    <button id="rv-add-run" class="claude" data-i="rv.add_run">Add &amp; run</button>
   </div>
 </div>
 

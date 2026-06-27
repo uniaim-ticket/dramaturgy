@@ -35,13 +35,17 @@ def read_json(path: str | Path) -> Any:
 
 
 def write_json(path: str | Path, data: Any) -> None:
-    """Write pretty-printed, UTF-8, newline-terminated JSON.
+    """Write pretty-printed, UTF-8, newline-terminated JSON atomically.
 
-    Sorted-by-insertion (not key) so authored ordering is preserved, but
-    stable across runs for clean Git diffs.
+    Writes to a temp file in the same directory then os.replace()s it into
+    place, so a concurrent reader never sees a half-written file (the review
+    auto-run worker and request threads both touch reviews.json).
     """
+    import os
     p = Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
-    with open(p, "w", encoding="utf-8") as fh:
+    tmp = p.with_suffix(p.suffix + ".tmp")
+    with open(tmp, "w", encoding="utf-8") as fh:
         json.dump(data, fh, ensure_ascii=False, indent=2)
         fh.write("\n")
+    os.replace(tmp, p)

@@ -16,9 +16,11 @@ const I18N = {
     "rv.kindhelp.reframe": "指摘を是として、正本の意味地図を修正します。",
     "rv.kindhelp.audit": "正本は変えず、矛盾・説明できないパターンを調査して記録します。",
     "rv.kindhelp.proposal": "現状とは別に「今後こう変えたい」を提案として記録します。",
-    "rv.add": "キューに追加", "rv.add_run": "追加して実行",
-    "rv.run": "実行", "rv.rerun": "再実行", "rv.delete": "削除",
-    "rv.run_all": "キューを実行",
+    "rv.add": "キューに追加",
+    "rv.rerun": "再実行", "rv.delete": "削除",
+    "rv.autorun_hint": "指摘は順番に自動実行されます。",
+    "rv.status.open": "待機中", "rv.status.running": "実行中",
+    "rv.status.done": "完了", "rv.status.error": "エラー",
     "rv.continue_session": "Claudeセッションを継続する",
     "rv.no_findings": "まだ指摘はありません。プレビューの + から追加します。",
     "rv.no_map": "先に「Claudeで一括初期化」で意味地図を生成してください。",
@@ -40,9 +42,11 @@ const I18N = {
     "rv.kindhelp.reframe": "Accept the remark and edit the canonical meaning map.",
     "rv.kindhelp.audit": "Leave the map unchanged; investigate contradictions / cases it can't explain.",
     "rv.kindhelp.proposal": "Record a future change separately from the as-is map.",
-    "rv.add": "Add to queue", "rv.add_run": "Add & run",
-    "rv.run": "Run", "rv.rerun": "Re-run", "rv.delete": "Delete",
-    "rv.run_all": "Run queued",
+    "rv.add": "Add to queue",
+    "rv.rerun": "Re-run", "rv.delete": "Delete",
+    "rv.autorun_hint": "Findings run automatically, in order.",
+    "rv.status.open": "queued", "rv.status.running": "running",
+    "rv.status.done": "done", "rv.status.error": "error",
     "rv.continue_session": "continue Claude session",
     "rv.no_findings": "No findings yet. Add one with the + in the preview.",
     "rv.no_map": "Generate the map first with “Initialize all with Claude”.",
@@ -173,12 +177,6 @@ function pollJob(jobId, elId, onDone, onEnd) {
   return () => clearInterval(animate);
 }
 
-// Promise wrapper used by the "run queued" loop (sequential).
-function pollJobDone(jobId, elId) {
-  return new Promise((resolve) => {
-    pollJob(jobId, elId, null, (status) => resolve(status));
-  });
-}
 
 function escapeHtml(s) {
   return String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
@@ -211,7 +209,7 @@ function closePopover() {
   POP_TARGET = null;
 }
 
-async function submitFinding(thenRun) {
+async function submitFinding() {
   if (!POP_TARGET) return;
   const comment = document.getElementById("rv-comment").value.trim();
   if (!comment) return;
@@ -221,12 +219,13 @@ async function submitFinding(thenRun) {
   if (status !== 201) { alert(data.error || "error"); return; }
   closePopover();
   setQueueVisible(true);   // make sure the new finding is visible
+  // The server auto-runs queued findings; loadFindings starts the poll loop.
   await loadFindings();
-  if (thenRun) runFinding(data.id);
 }
 
 // ---- finding queue -----------------------------------------------------
 const KIND_CLASS = { reframe: "k-reframe", audit: "k-audit", proposal: "k-proposal" };
+let RV_REFRESH = null;   // periodic refresh timer while the queue is active
 
 async function loadFindings() {
   const { status, data } = await api("GET", "/api/review/findings");
@@ -239,19 +238,32 @@ async function loadFindings() {
   list.innerHTML = "";
   empty.hidden = findings.length > 0;
   findings.forEach((f) => list.appendChild(findingCard(f)));
+
+  // Runs happen automatically on the server. While anything is still
+  // open/running, re-poll the list so the UI tracks the worker's progress.
+  const active = findings.some((f) => f.status === "open" || f.status === "running");
+  if (active && !RV_REFRESH) {
+    RV_REFRESH = setInterval(loadFindings, 2000);
+  } else if (!active && RV_REFRESH) {
+    clearInterval(RV_REFRESH);
+    RV_REFRESH = null;
+  }
 }
+
+// Track which running job we're already polling, so we don't double-poll.
+const RV_POLLED = new Set();
 
 function findingCard(f) {
   const card = document.createElement("div");
   card.className = "rv-card";
-  const ran = f.status === "done" || f.status === "error";
   const scope = f.field_label
     ? ` <span class="muted tiny">› ${escapeHtml(f.field_label)}</span>` : "";
+  const statusLabel = t("rv.status." + f.status) || f.status;
   card.innerHTML =
     `<div class="rv-head">
        <span class="badge ${KIND_CLASS[f.kind] || ""}">${escapeHtml(t("rv.kind." + f.kind))}</span>
        <b>${escapeHtml(f.target_name || f.target_id)}</b>${scope}
-       <span class="muted tiny">${escapeHtml(f.status)}</span>
+       <span class="muted tiny rv-status rv-status-${escapeHtml(f.status)}">${escapeHtml(statusLabel)}</span>
      </div>
      <div class="rv-comment">${escapeHtml(f.comment)}</div>`;
   const job = document.createElement("div");
@@ -275,49 +287,33 @@ function findingCard(f) {
     card.appendChild(r);
   }
 
+  // Runs are automatic. Done/error findings can be re-queued; any finding
+  // can be removed.
   const row = document.createElement("div");
   row.className = "row";
-  const run = document.createElement("button");
-  run.className = "claude";
-  run.textContent = ran ? t("rv.rerun") : t("rv.run");
-  run.onclick = () => runFinding(f.id);
+  if (f.status === "done" || f.status === "error") {
+    const rerun = document.createElement("button");
+    rerun.className = "claude";
+    rerun.textContent = t("rv.rerun");
+    rerun.onclick = async () => {
+      await api("POST", "/api/review/findings/" + f.id + "/rerun");
+      loadFindings();
+    };
+    row.appendChild(rerun);
+  }
   const del = document.createElement("button");
   del.textContent = t("rv.delete");
   del.onclick = async () => { await api("DELETE", "/api/review/findings/" + f.id); loadFindings(); };
-  row.appendChild(run); row.appendChild(del);
+  row.appendChild(del);
   card.appendChild(row);
-  return card;
-}
 
-function continueSession() {
-  return document.getElementById("rv-continue").checked;
-}
-
-async function runFinding(fid) {
-  const { status, data } = await api(
-    "POST", "/api/review/findings/" + fid + "/run", { continue_session: continueSession() });
-  if (status !== 202) { showJob("rvjob-" + fid, { status: "error", error: data.error }); return; }
-  await pollJobDone(data.job_id, "rvjob-" + fid);
-  await loadFindings();
-  refreshView();   // reframe may have changed the map
-}
-
-async function runAllQueued() {
-  const { data } = await api("GET", "/api/review/findings");
-  const open = (data.findings || []).filter((f) => f.status === "open");
-  const btn = document.getElementById("rv-run-all");
-  btn.disabled = true;
-  // Sequential so a continued session keeps order and we don't hammer Claude.
-  for (const f of open) {
-    const { status, data: r } = await api(
-      "POST", "/api/review/findings/" + f.id + "/run",
-      { continue_session: continueSession() });
-    if (status !== 202) { showJob("rvjob-" + f.id, { status: "error", error: r.error }); continue; }
-    await pollJobDone(r.job_id, "rvjob-" + f.id);
-    await loadFindings();
-    refreshView();
+  // Live progress for a finding the server worker is currently running.
+  if (f.status === "running" && f.job_id && !RV_POLLED.has(f.job_id)) {
+    RV_POLLED.add(f.job_id);
+    pollJob(f.job_id, "rvjob-" + f.id, () => refreshView(),
+            () => { RV_POLLED.delete(f.job_id); });
   }
-  btn.disabled = false;
+  return card;
 }
 
 // ---- concept tag editor (direct edit, no Claude) -----------------------
@@ -423,10 +419,11 @@ function init() {
   document.getElementById("refresh-view").onclick = refreshView;
   document.getElementById("toggle-queue").onclick = toggleQueue;
   document.getElementById("save-config").onclick = saveConfig;
-  document.getElementById("rv-run-all").onclick = runAllQueued;
-  document.getElementById("rv-add").onclick = () => submitFinding(false);
-  document.getElementById("rv-add-run").onclick = () => submitFinding(true);
+  document.getElementById("rv-add").onclick = () => submitFinding();
   document.getElementById("pop-close").onclick = closePopover;
+  // Continue-session is a server-side setting (the worker reads it).
+  document.getElementById("rv-continue").onchange = (e) =>
+    api("PUT", "/api/review/settings", { continue_session: e.target.checked });
   document.querySelectorAll('input[name="rvkind"]').forEach(
     (r) => (r.onchange = updateKindHelp));
 
@@ -450,7 +447,14 @@ function init() {
     }
   });
 
-  refreshState().then(() => { refreshView(); loadFindings(); });
+  refreshState().then(async () => {
+    refreshView();
+    const { status, data } = await api("GET", "/api/review/settings");
+    if (status === 200) {
+      document.getElementById("rv-continue").checked = !!data.continue_session;
+    }
+    loadFindings();
+  });
 }
 
 document.addEventListener("DOMContentLoaded", init);

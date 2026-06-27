@@ -129,9 +129,9 @@ The UI is a **map preview + a review queue**. The flow is:
    (the **+** on its tags cell; no Claude needed). The tag vocabulary is
    per-project, kept in `.dramaturgy/tags.json`, and is offered to Claude when
    generating cards.
-3. **Add findings inline**: click the **+** on any actor, concept, or area to
-   open a small popover, pick a kind, write a remark, and either *Add to queue*
-   or *Add & run*. Each finding (a remark) has one of three kinds, processed
+3. **Add findings inline**: click the **+** on any actor, concept, or area (or
+   a specific field/row) to open a small popover, pick a kind, and write a
+   remark. Each finding (a remark) has one of three kinds, processed
    differently:
 
    | Kind | What Claude does | Where it goes |
@@ -140,11 +140,13 @@ The UI is a **map preview + a review queue**. The flow is:
    | **audit** | check for contradictions / cases it can't explain | writes `audits/<id>.json`; map unchanged |
    | **proposal** | record a desired future change | writes `proposals/<id>.md`; as-is map unchanged |
 
-4. **Process the queue** on the right: run findings individually, or **Run
-   queued** to process all open ones in order. Toggle **continue Claude
-   session** to keep context across findings, or leave it off to run each in a
-   fresh session. Findings persist in `.dramaturgy/reviews.json`; after a
-   reframe the preview refreshes automatically.
+4. **Findings run automatically.** A background worker drains the queue one at
+   a time, in order — you don't start or stop runs. The queue on the right
+   shows each finding's status (queued → running → done) with live progress;
+   after a reframe the preview refreshes. A done/error finding can be re-queued
+   ("Re-run"). Toggle **continue Claude session** (a persisted setting) to keep
+   context across findings or run each fresh. Findings persist in
+   `.dramaturgy/reviews.json`.
 
 ## Usage — inside Claude Code
 

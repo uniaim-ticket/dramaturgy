@@ -61,11 +61,13 @@ class Router:
         self._add("GET", "/api/jobs", "h_list_jobs")
         # Interactive review (3-kind findings).
         self._add("GET", "/api/review/targets", "h_review_targets")
+        self._add("GET", "/api/review/settings", "h_get_review_settings")
+        self._add("PUT", "/api/review/settings", "h_put_review_settings")
         self._add("GET", "/api/review/findings", "h_list_findings")
         self._add("POST", "/api/review/findings", "h_create_finding")
         self._add("PATCH", "/api/review/findings/<fid>", "h_update_finding")
         self._add("DELETE", "/api/review/findings/<fid>", "h_delete_finding")
-        self._add("POST", "/api/review/findings/<fid>/run", "h_run_finding")
+        self._add("POST", "/api/review/findings/<fid>/rerun", "h_rerun_finding")
 
     def resolve(self, method: str, path: str):
         for m, regex, fn_name in self.routes:
@@ -157,8 +159,14 @@ class Router:
     def h_delete_finding(self, params, body, query):
         return self.api.delete_finding(params["fid"])
 
-    def h_run_finding(self, params, body, query):
-        return self.api.run_finding(params["fid"], body or {})
+    def h_rerun_finding(self, params, body, query):
+        return self.api.rerun_finding(params["fid"])
+
+    def h_get_review_settings(self, params, body, query):
+        return self.api.get_review_settings()
+
+    def h_put_review_settings(self, params, body, query):
+        return self.api.put_review_settings(body or {})
 
 
 def make_handler(api: Api):

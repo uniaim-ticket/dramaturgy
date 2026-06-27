@@ -41,6 +41,26 @@ class Api:
         self.spawn = spawn or claude_runner.default_spawn
         self.jobs = JobRegistry()
         ensure_workspace(repo_root)
+        # Review queue auto-runs: a single background worker drains open
+        # findings one at a time, in order. Users don't start/stop runs.
+        self._review_lock = threading.Lock()
+        self._review_worker: threading.Thread | None = None
+        self._recover_and_start_worker()
+
+    def _recover_and_start_worker(self) -> None:
+        """Re-queue findings left 'running' by a previous process, then start
+        the worker if there is anything open."""
+        data = reviews.load_reviews(self.repo_root)
+        changed = False
+        for f in data["findings"]:
+            if f.get("status") == "running":
+                f["status"] = "open"
+                f["job_id"] = None
+                changed = True
+        if changed:
+            reviews.save_reviews(self.repo_root, data)
+        if any(f.get("status") == "open" for f in data["findings"]):
+            self._ensure_review_worker()
 
     # ---- helpers -------------------------------------------------------
     @property
@@ -384,11 +404,20 @@ class Api:
     def list_findings(self):
         return 200, reviews.load_reviews(self.repo_root)
 
+    def get_review_settings(self):
+        return 200, reviews.load_reviews(self.repo_root)["settings"]
+
+    def put_review_settings(self, body: dict):
+        return 200, reviews.set_settings(self.repo_root, body or {})
+
     def create_finding(self, body: dict):
         err = reviews.validate_new(body or {})
         if err:
             return 400, {"error": err}
-        return 201, reviews.create_finding(self.repo_root, body)
+        finding = reviews.create_finding(self.repo_root, body)
+        # Queued findings auto-run: wake the worker so it drains the queue.
+        self._ensure_review_worker()
+        return 201, finding
 
     def update_finding(self, fid: str, body: dict):
         f = reviews.update_finding(self.repo_root, fid, body or {})
@@ -401,36 +430,32 @@ class Api:
             return 404, {"error": "finding not found"}
         return 200, {"ok": True}
 
-    def run_finding(self, fid: str, body: dict | None = None):
-        """Run one finding through Claude.
-
-        body.continue_session: if true, resume the finding's prior session
-        (or the most recent review session) to keep context; otherwise start
-        a fresh session. The result is routed by kind: reframe edits the
-        canonical map, audit/proposal write to their own files.
-        """
-        body = body or {}
-        finding = reviews.get_finding(self.repo_root, fid)
-        if finding is None:
+    def rerun_finding(self, fid: str):
+        """Re-queue a finding (set it back to open); the worker picks it up."""
+        f = reviews.update_finding(self.repo_root, fid,
+                                   {"status": "open", "job_id": None})
+        if f is None:
             return 404, {"error": "finding not found"}
-        cfg = self._config()
-        try:
-            prompt, out_path = review_prompt(
-                self.repo_root, cfg.content_lang, finding)
-        except FileNotFoundError as exc:
-            return 400, {"error": f"missing template: {exc}"}
+        self._ensure_review_worker()
+        return 202, f
 
-        resume = None
-        if body.get("continue_session"):
-            resume = finding.get("session_id") or self._last_review_session()
+    # ---- auto-run worker -----------------------------------------------
+    def _ensure_review_worker(self) -> None:
+        """Start the review worker if it isn't already running."""
+        with self._review_lock:
+            if self._review_worker and self._review_worker.is_alive():
+                return
+            self._review_worker = threading.Thread(
+                target=self._review_loop, daemon=True)
+            self._review_worker.start()
 
-        reviews.update_finding(self.repo_root, fid, {"status": "running"})
-        job = self.jobs.create(f"review:{finding['kind']}", prompt,
-                               {"finding_id": fid, "out_path": out_path})
-        threading.Thread(
-            target=self._run_finding, args=(job, fid, resume),
-            daemon=True).start()
-        return 202, {"job_id": job.id}
+    def _review_loop(self) -> None:
+        """Drain open findings one at a time, in order, until none remain."""
+        while True:
+            finding = reviews.claim_next_open(self.repo_root)
+            if finding is None:
+                return
+            self._run_one_finding(finding)
 
     def _last_review_session(self) -> str | None:
         sessions = [f.get("session_id")
@@ -438,7 +463,28 @@ class Api:
                     if f.get("session_id")]
         return sessions[-1] if sessions else None
 
-    def _run_finding(self, job, fid: str, resume: str | None) -> None:
+    def _run_one_finding(self, finding: dict) -> None:
+        fid = finding["id"]
+        cfg = self._config()
+        try:
+            prompt, out_path = review_prompt(
+                self.repo_root, cfg.content_lang, finding)
+        except FileNotFoundError as exc:
+            reviews.update_finding(self.repo_root, fid,
+                                   {"status": "error",
+                                    "result": f"missing template: {exc}"})
+            return
+
+        settings = reviews.load_reviews(self.repo_root)["settings"]
+        resume = None
+        if settings.get("continue_session"):
+            resume = finding.get("session_id") or self._last_review_session()
+
+        job = self.jobs.create(f"review:{finding['kind']}", prompt,
+                               {"finding_id": fid, "out_path": out_path})
+        # Record the job id so the UI can follow progress for this finding.
+        reviews.update_finding(self.repo_root, fid, {"job_id": job.id})
+
         ok, err = claude_runner.stream_claude_with_retry(
             job, job.prompt, self.repo_root,
             claude_bin=self.claude_bin, spawn=self.spawn,
@@ -448,7 +494,6 @@ class Api:
             job.set_status("done")
             patch["status"] = "done"
             patch["result"] = job.result_summary
-            out_path = job.meta.get("out_path")
             if out_path and Path(out_path).exists():
                 if job.kind == "review:audit":
                     try:

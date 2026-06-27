@@ -55,3 +55,38 @@ def area_card_prompt(repo_root: str, content_lang: str, area_id: str) -> str:
         lang=content_lang,
     )
     return body + footer
+
+
+# kind -> (template name, extra output path key)
+_REVIEW_TEMPLATES = {
+    "reframe": "review_reframe",
+    "audit": "review_audit",
+    "proposal": "review_proposal",
+}
+
+
+def review_prompt(repo_root: str, content_lang: str, finding: dict) -> tuple[str, str | None]:
+    """Build the prompt for one review finding.
+
+    Returns ``(prompt, output_path)`` where output_path is the audit/proposal
+    file the run will produce (None for reframe, which edits the canonical map
+    in place).
+    """
+    ws = workspace_dir(repo_root)
+    name = _REVIEW_TEMPLATES[finding["kind"]]
+    map_path = str(ws / "meaning-map.json")
+    slots = {
+        "target_type": finding["target_type"],
+        "target_id": finding["target_id"],
+        "target_name": finding.get("target_name", ""),
+        "comment": finding["comment"],
+        "map_path": map_path,
+    }
+    output_path: str | None = None
+    if finding["kind"] == "audit":
+        output_path = str(ws / "audits" / f"{finding['id']}.json")
+        slots["audit_path"] = output_path
+    elif finding["kind"] == "proposal":
+        output_path = str(ws / "proposals" / f"{finding['id']}.md")
+        slots["proposal_path"] = output_path
+    return render_prompt(name, content_lang, **slots), output_path

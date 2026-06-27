@@ -56,6 +56,13 @@ class Router:
         self._add("POST", "/api/jobs/area-card", "h_job_area_card")
         self._add("GET", "/api/jobs/<job_id>", "h_get_job")
         self._add("GET", "/api/jobs", "h_list_jobs")
+        # Interactive review (3-kind findings).
+        self._add("GET", "/api/review/targets", "h_review_targets")
+        self._add("GET", "/api/review/findings", "h_list_findings")
+        self._add("POST", "/api/review/findings", "h_create_finding")
+        self._add("PATCH", "/api/review/findings/<fid>", "h_update_finding")
+        self._add("DELETE", "/api/review/findings/<fid>", "h_delete_finding")
+        self._add("POST", "/api/review/findings/<fid>/run", "h_run_finding")
 
     def resolve(self, method: str, path: str):
         for m, regex, fn_name in self.routes:
@@ -122,6 +129,25 @@ class Router:
     def h_list_jobs(self, params, body, query):
         return self.api.list_jobs()
 
+    # ---- review handlers ----
+    def h_review_targets(self, params, body, query):
+        return self.api.list_review_targets()
+
+    def h_list_findings(self, params, body, query):
+        return self.api.list_findings()
+
+    def h_create_finding(self, params, body, query):
+        return self.api.create_finding(body or {})
+
+    def h_update_finding(self, params, body, query):
+        return self.api.update_finding(params["fid"], body or {})
+
+    def h_delete_finding(self, params, body, query):
+        return self.api.delete_finding(params["fid"])
+
+    def h_run_finding(self, params, body, query):
+        return self.api.run_finding(params["fid"], body or {})
+
 
 def make_handler(api: Api):
     router = Router(api)
@@ -167,6 +193,9 @@ def make_handler(api: Api):
 
         def do_PATCH(self):
             self._dispatch("PATCH")
+
+        def do_DELETE(self):
+            self._dispatch("DELETE")
 
         # -- helpers ------------------------------------------------------
         def _read_body(self):

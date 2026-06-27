@@ -8,7 +8,7 @@ reflects the content language.
 Views:
 - Areas: a grid of clickable boxes; each expands (native <details>) to its
   detail card. No "overall map" section (it carried no real information).
-- Concept tables: each concept with the physical tables it abstracts and the
+- Concept data: each concept with the physical tables it abstracts and the
   areas that use it.
 - CRUD: the same concept-centric data shown two ways — by area and by concept.
 - Developer reference and validation.

@@ -76,3 +76,19 @@ ul#area-list .meta { font-size: 12px; color: #5a6573; }
   width: 100%; padding: 5px 8px; border: 1px solid #c4ccd4; border-radius: 5px;
   font-size: 13px;
 }
+
+/* Review panel */
+.tiny { font-size: 12px; }
+.review-add { border: 1px solid #e2e6ea; border-radius: 8px; padding: 12px;
+  margin-bottom: 16px; background: #fbfcfd; }
+.review-add select, .review-add textarea { font-size: 13px; padding: 5px 8px;
+  border: 1px solid #c4ccd4; border-radius: 5px; }
+.review-add textarea { width: 100%; }
+#rv-kind-help { margin: 4px 0 8px; }
+.rv-card { border: 1px solid #e2e6ea; border-radius: 8px; padding: 10px 12px;
+  margin-bottom: 10px; }
+.rv-head { display: flex; align-items: baseline; gap: 8px; }
+.rv-comment { margin: 6px 0; font-size: 14px; }
+.badge.k-reframe { background: #e5eefc; color: #1f4f9c; }
+.badge.k-audit { background: #fdeede; color: #9a6700; }
+.badge.k-proposal { background: #e9f5ea; color: #1a7f37; }

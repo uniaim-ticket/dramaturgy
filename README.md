@@ -135,9 +135,22 @@ Or step through manually:
    refreshes.
 
 The rendered map shows: business areas as a grid of clickable boxes that
-expand to detail; **concept tables** (physical tables grouped by business
+expand to detail; **concept data** (physical tables grouped by business
 meaning) with the areas that use them; and **CRUD** viewable both *by area*
-and *by concept table* (the same concept-centric data, two directions).
+and *by concept* (the same concept-centric data, two directions).
+
+5. **Review** — point at an actor, concept, or area and add a remark. Each
+   remark (a *finding*) has one of three kinds, processed differently:
+
+   | Kind | What Claude does | Where it goes |
+   | --- | --- | --- |
+   | **reframe** | accept the remark and re-organize the understanding | edits `meaning-map.json` |
+   | **audit** | check for contradictions / cases it can't explain | writes `audits/<id>.json`; map unchanged |
+   | **proposal** | record a desired future change | writes `proposals/<id>.md`; as-is map unchanged |
+
+   Toggle **continue Claude session** to keep context across findings, or
+   leave it off to run each in a fresh session. Findings persist in
+   `.dramaturgy/reviews.json`.
 
 ## Usage — inside Claude Code
 

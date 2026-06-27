@@ -22,8 +22,9 @@ from ..commands.render_html import render_html
 from ..commands.validate_map import Report, validate as run_validate
 from ..common.i18n import Catalog
 from . import claude_runner
+from . import reviews
 from .jobs import JobRegistry
-from .prompt_jobs import area_card_prompt, area_tree_prompt
+from .prompt_jobs import area_card_prompt, area_tree_prompt, review_prompt
 
 
 class Api:
@@ -331,3 +332,102 @@ class Api:
 
     def list_jobs(self):
         return 200, {"jobs": [j.to_dict() for j in self.jobs.list()]}
+
+    # ---- interactive review (3-kind findings) --------------------------
+    def list_review_targets(self):
+        """Items that can be reviewed, actors first (the usual entry point)."""
+        mm = self._read_optional("meaning-map.json")
+        if mm is None:
+            return 404, {"error": "meaning-map.json not found"}
+
+        def items(key):
+            return [{"id": x.get("id"), "name": x.get("name") or x.get("id")}
+                    for x in mm.get(key, [])]
+        return 200, {
+            "actors": items("actors"),
+            "concepts": items("concepts"),
+            "areas": items("areas"),
+        }
+
+    def list_findings(self):
+        return 200, reviews.load_reviews(self.repo_root)
+
+    def create_finding(self, body: dict):
+        err = reviews.validate_new(body or {})
+        if err:
+            return 400, {"error": err}
+        return 201, reviews.create_finding(self.repo_root, body)
+
+    def update_finding(self, fid: str, body: dict):
+        f = reviews.update_finding(self.repo_root, fid, body or {})
+        if f is None:
+            return 404, {"error": "finding not found"}
+        return 200, f
+
+    def delete_finding(self, fid: str):
+        if not reviews.delete_finding(self.repo_root, fid):
+            return 404, {"error": "finding not found"}
+        return 200, {"ok": True}
+
+    def run_finding(self, fid: str, body: dict | None = None):
+        """Run one finding through Claude.
+
+        body.continue_session: if true, resume the finding's prior session
+        (or the most recent review session) to keep context; otherwise start
+        a fresh session. The result is routed by kind: reframe edits the
+        canonical map, audit/proposal write to their own files.
+        """
+        body = body or {}
+        finding = reviews.get_finding(self.repo_root, fid)
+        if finding is None:
+            return 404, {"error": "finding not found"}
+        cfg = self._config()
+        try:
+            prompt, out_path = review_prompt(
+                self.repo_root, cfg.content_lang, finding)
+        except FileNotFoundError as exc:
+            return 400, {"error": f"missing template: {exc}"}
+
+        resume = None
+        if body.get("continue_session"):
+            resume = finding.get("session_id") or self._last_review_session()
+
+        reviews.update_finding(self.repo_root, fid, {"status": "running"})
+        job = self.jobs.create(f"review:{finding['kind']}", prompt,
+                               {"finding_id": fid, "out_path": out_path})
+        threading.Thread(
+            target=self._run_finding, args=(job, fid, resume),
+            daemon=True).start()
+        return 202, {"job_id": job.id}
+
+    def _last_review_session(self) -> str | None:
+        sessions = [f.get("session_id")
+                    for f in reviews.load_reviews(self.repo_root)["findings"]
+                    if f.get("session_id")]
+        return sessions[-1] if sessions else None
+
+    def _run_finding(self, job, fid: str, resume: str | None) -> None:
+        ok, err = claude_runner.stream_claude_with_retry(
+            job, job.prompt, self.repo_root,
+            claude_bin=self.claude_bin, spawn=self.spawn,
+            resume_session=resume)
+        patch = {"session_id": job.session_id}
+        if ok:
+            job.set_status("done")
+            patch["status"] = "done"
+            patch["result"] = job.result_summary
+            out_path = job.meta.get("out_path")
+            if out_path and Path(out_path).exists():
+                if job.kind == "review:audit":
+                    try:
+                        patch["audit_result"] = read_json(out_path)
+                    except (FileNotFoundError, ValueError):
+                        pass
+                elif job.kind == "review:proposal":
+                    patch["proposal_ref"] = out_path
+        else:
+            status = "aborted" if err and "without a result" in err else "error"
+            job.set_status(status, error=err)
+            patch["status"] = "error"
+            patch["result"] = err or ""
+        reviews.update_finding(self.repo_root, fid, patch)

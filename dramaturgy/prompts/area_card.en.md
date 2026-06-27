@@ -17,14 +17,14 @@ the tables/entities, APIs, screens, flows, and state transitions. Tables are
 not necessarily SQL — they may be defined in ORM models, migrations, or
 framework conventions, so judge from the file contents.
 
-Concept tables (important):
+Concept data (important):
 - Do not list physical tables (real DB tables / ORM models) directly.
-  Compress them into **concept tables** by business meaning (e.g. physical
+  Compress them into **concept data** by business meaning (e.g. physical
   `orders` + `order_items` + `order_status_histories` → concept "Order").
 - For each concept, list the supporting **physical table names in
   physical_tables**.
 - Declare what this area does to each concept as **concept_crud** (ops is a
-  subset of "C"/"R"/"U"/"D", e.g. "CRU"). CRUD is expressed per concept table.
+  subset of "C"/"R"/"U"/"D", e.g. "CRU"). CRUD is expressed per concept data.
 
 Output area-map JSON shape (for this area):
 

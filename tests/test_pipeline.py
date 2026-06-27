@@ -206,7 +206,7 @@ class PipelineTests(unittest.TestCase):
             self.assertEqual(0, dra(["render", "--repo-root", d]))
             html = (ws / "meaning-map.html").read_text()
             # English chrome, content language note present, lang=ja.
-            self.assertIn("Concept tables", html)   # English nav label
+            self.assertIn("Concept data", html)   # English nav label
             self.assertIn("Content language: ja", html)
             self.assertIn('lang="ja"', html)
 

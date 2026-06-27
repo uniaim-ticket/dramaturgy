@@ -404,5 +404,123 @@ class HttpTests(unittest.TestCase):
                 httpd.shutdown()
 
 
+class ReviewTests(unittest.TestCase):
+    def _api_with_map(self, d):
+        api = Api(d)
+        mm = {"content_lang": "ja",
+              "system": {"name": "S", "source_summary": {}},
+              "actors": [{"id": "user", "name": "利用者", "actions": []}],
+              "concepts": [{"id": "order", "name": "注文",
+                            "physical_tables": ["orders"], "kind": "entity"}],
+              "areas": [{"id": "sales", "name": "販売", "concepts": ["order"],
+                         "concept_crud": [{"concept_id": "order", "ops": "CR"}],
+                         "related_area_ids": [], "child_area_ids": []}],
+              "flows": []}
+        api.put_artifact("meaning-map.json", mm)
+        return api
+
+    def _run(self, api, fid):
+        status, res = api.run_finding(fid, {"continue_session": False})
+        self.assertEqual(status, 202)
+        for _ in range(100):
+            job = api.get_job(res["job_id"])[1]
+            if job["status"] in ("done", "error", "aborted"):
+                break
+            time.sleep(0.02)
+        return job
+
+    def test_create_validates_and_lists(self):
+        with tempfile.TemporaryDirectory() as d:
+            api = self._api_with_map(d)
+            # actors first in the target listing.
+            targets = api.list_review_targets()[1]
+            self.assertEqual(list(targets.keys()), ["actors", "concepts", "areas"])
+            self.assertEqual(400, api.create_finding({"target_type": "bad"})[0])
+            st, f = api.create_finding({
+                "target_type": "actor", "target_id": "user",
+                "kind": "reframe", "comment": "来場者として捉え直す"})
+            self.assertEqual(st, 201)
+            self.assertEqual(api.list_findings()[1]["findings"][0]["id"], f["id"])
+
+    def test_reframe_edits_canonical_map(self):
+        with tempfile.TemporaryDirectory() as d:
+            api = self._api_with_map(d)
+            ws = api.ws
+
+            def spawn(argv):
+                m = json.loads((ws / "meaning-map.json").read_text())
+                m["actors"][0]["name"] = "来場者"
+                lines = [json.dumps({"type": "system", "subtype": "init",
+                                     "session_id": "rev1"}),
+                         json.dumps({"type": "result", "is_error": False,
+                                     "subtype": "success", "result": "ok",
+                                     "session_id": "rev1"})]
+                return _FakeProc(lines, [(ws / "meaning-map.json",
+                                          json.dumps(m, ensure_ascii=False))])
+            api.spawn = spawn
+            _, f = api.create_finding({"target_type": "actor",
+                                       "target_id": "user", "kind": "reframe",
+                                       "comment": "来場者へ"})
+            job = self._run(api, f["id"])
+            self.assertEqual(job["status"], "done")
+            mm = api.get_artifact("meaning-map.json")[1]
+            self.assertEqual(mm["actors"][0]["name"], "来場者")
+            stored = api.list_findings()[1]["findings"][0]
+            self.assertEqual(stored["status"], "done")
+            self.assertEqual(stored["session_id"], "rev1")
+
+    def test_audit_writes_result_without_changing_map(self):
+        with tempfile.TemporaryDirectory() as d:
+            api = self._api_with_map(d)
+            ws = api.ws
+            before = (ws / "meaning-map.json").read_text()
+
+            def spawn(argv):
+                import re
+                prompt = argv[argv.index("-p") + 1]
+                ap = re.search(r'([^\s`]+audits[^\s`]*\.json)', prompt).group(1)
+                payload = {"verdict": "unclear", "contradictions": [],
+                           "unexplained_cases": ["再注文"], "evidence": [],
+                           "notes": []}
+                lines = [json.dumps({"type": "system", "subtype": "init",
+                                     "session_id": "a1"}),
+                         json.dumps({"type": "result", "is_error": False,
+                                     "subtype": "success", "result": "ok"})]
+                return _FakeProc(lines, [(Path(ap),
+                                          json.dumps(payload, ensure_ascii=False))])
+            api.spawn = spawn
+            _, f = api.create_finding({"target_type": "concept",
+                                       "target_id": "order", "kind": "audit",
+                                       "comment": "キャンセルは説明できる?"})
+            job = self._run(api, f["id"])
+            self.assertEqual(job["status"], "done")
+            # Canonical map unchanged.
+            self.assertEqual((ws / "meaning-map.json").read_text(), before)
+            stored = api.list_findings()[1]["findings"][0]
+            self.assertEqual(stored["audit_result"]["verdict"], "unclear")
+
+    def test_proposal_writes_separate_file(self):
+        with tempfile.TemporaryDirectory() as d:
+            api = self._api_with_map(d)
+            ws = api.ws
+
+            def spawn(argv):
+                import re
+                prompt = argv[argv.index("-p") + 1]
+                pp = re.search(r'([^\s`]+proposals[^\s`]*\.md)', prompt).group(1)
+                lines = [json.dumps({"type": "result", "is_error": False,
+                                     "subtype": "success", "result": "ok"})]
+                return _FakeProc(lines, [(Path(pp), "# proposal\n…")])
+            api.spawn = spawn
+            _, f = api.create_finding({"target_type": "area",
+                                       "target_id": "sales", "kind": "proposal",
+                                       "comment": "サブスク販売を追加"})
+            job = self._run(api, f["id"])
+            self.assertEqual(job["status"], "done")
+            stored = api.list_findings()[1]["findings"][0]
+            self.assertTrue(stored["proposal_ref"])
+            self.assertTrue(Path(stored["proposal_ref"]).exists())
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

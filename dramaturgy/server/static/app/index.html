@@ -23,6 +23,7 @@
   <button data-step="tree"    data-i="step.tree">2. Area tree</button>
   <button data-step="cards"   data-i="step.cards">3. Area cards</button>
   <button data-step="map"     data-i="step.map">4. Map &amp; view</button>
+  <button data-step="review"  data-i="step.review">5. Review</button>
 </nav>
 
 <main>
@@ -70,6 +71,39 @@
       <pre id="map-out" class="out"></pre>
       <h3 data-i="map.edit_area">Edit area (writes back to meaning-map.json)</h3>
       <div id="area-editor"></div>
+    </div>
+
+    <div id="view-review" class="view" hidden>
+      <h2 data-i="step.review">Review</h2>
+      <p class="muted" data-i="review.help">Point at an actor, concept, or area and add a remark. reframe edits the map; audit only investigates; proposal records a future change.</p>
+
+      <div class="review-add">
+        <div class="row">
+          <select id="rv-type">
+            <option value="actor" data-i="rv.type.actor">Actor</option>
+            <option value="concept" data-i="rv.type.concept">Concept data</option>
+            <option value="area" data-i="rv.type.area">Area</option>
+          </select>
+          <select id="rv-target"></select>
+        </div>
+        <div class="subtabs" id="rv-kind">
+          <input type="radio" name="rvkind" id="rv-reframe" value="reframe" checked>
+          <label for="rv-reframe" data-i="rv.kind.reframe">reframe</label>
+          <input type="radio" name="rvkind" id="rv-audit" value="audit">
+          <label for="rv-audit" data-i="rv.kind.audit">audit</label>
+          <input type="radio" name="rvkind" id="rv-proposal" value="proposal">
+          <label for="rv-proposal" data-i="rv.kind.proposal">proposal</label>
+        </div>
+        <p class="muted tiny" id="rv-kind-help"></p>
+        <textarea id="rv-comment" rows="3" placeholder="…"></textarea>
+        <div class="row">
+          <button id="rv-add" class="primary" data-i="rv.add">Add finding</button>
+        </div>
+      </div>
+
+      <h3 data-i="rv.queue">Findings</h3>
+      <label class="tiny"><input type="checkbox" id="rv-continue"> <span data-i="rv.continue_session">continue Claude session</span></label>
+      <div id="rv-list"></div>
     </div>
   </section>
 

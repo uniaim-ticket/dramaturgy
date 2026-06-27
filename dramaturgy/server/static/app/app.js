@@ -20,6 +20,19 @@ const I18N = {
     "init.run": "Claudeで一括初期化", "init.help": "全工程を一度に実行します: 解析 → 領域ツリー → 領域カード → 統合 → 検査 → HTML生成。完了後、下の各ステップで個別に調整できます。",
     "init.running": "一括初期化を実行中…", "init.done": "一括初期化が完了しました",
     "job.idle": "応答待ち",
+    "step.review": "5. レビュー",
+    "review.help": "登場人物・概念データ・業務領域を指して指摘を追加します。reframe=地図を修正 / audit=矛盾や説明できないパターンを調査（地図は変えない）/ proposal=今後の変更を記録。",
+    "rv.type.actor": "登場人物", "rv.type.concept": "概念データ", "rv.type.area": "業務領域",
+    "rv.kind.reframe": "再整理", "rv.kind.audit": "検査", "rv.kind.proposal": "将来提案",
+    "rv.kindhelp.reframe": "指摘を是として、正本の意味地図を修正します。",
+    "rv.kindhelp.audit": "正本は変えず、矛盾・説明できないパターンを調査して記録します。",
+    "rv.kindhelp.proposal": "現状とは別に「今後こう変えたい」を提案として記録します。",
+    "rv.add": "指摘を追加", "rv.queue": "指摘一覧",
+    "rv.continue_session": "Claudeセッションを継続する",
+    "rv.run": "実行", "rv.rerun": "再実行", "rv.delete": "削除",
+    "rv.view_result": "結果を表示",
+    "rv.no_findings": "まだ指摘はありません。",
+    "rv.no_map": "先に意味地図を生成してください（4. 統合・表示）。",
   },
   en: {
     "btn.save_config": "Save", "step.analyze": "1. Analyze", "step.tree": "2. Area tree",
@@ -37,6 +50,19 @@ const I18N = {
     "init.run": "Initialize all with Claude", "init.help": "Run the full pipeline once: analyze → area tree → area cards → merge → validate → render. Adjust individual steps below afterwards.",
     "init.running": "Initializing…", "init.done": "Initialization complete",
     "job.idle": "awaiting response",
+    "step.review": "5. Review",
+    "review.help": "Point at an actor, concept, or area and add a remark. reframe edits the map; audit only investigates (no map change); proposal records a future change.",
+    "rv.type.actor": "Actor", "rv.type.concept": "Concept data", "rv.type.area": "Area",
+    "rv.kind.reframe": "reframe", "rv.kind.audit": "audit", "rv.kind.proposal": "proposal",
+    "rv.kindhelp.reframe": "Accept the remark and edit the canonical meaning map.",
+    "rv.kindhelp.audit": "Leave the map unchanged; investigate contradictions / cases it can't explain.",
+    "rv.kindhelp.proposal": "Record a future change separately from the as-is map.",
+    "rv.add": "Add finding", "rv.queue": "Findings",
+    "rv.continue_session": "continue Claude session",
+    "rv.run": "Run", "rv.rerun": "Re-run", "rv.delete": "Delete",
+    "rv.view_result": "View result",
+    "rv.no_findings": "No findings yet.",
+    "rv.no_map": "Generate the meaning map first (4. Map & view).",
   },
 };
 
@@ -96,6 +122,7 @@ function showStep(step) {
   if (step === "tree") loadTreeJson();
   if (step === "cards") loadAreaList();
   if (step === "map") loadAreaEditor();
+  if (step === "review") loadReview();
 }
 
 // ---- one-shot full initialization --------------------------------------
@@ -322,6 +349,136 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
 }
 
+// ---- step 5: interactive review ----------------------------------------
+let RV_TARGETS = null;
+
+async function loadReview() {
+  const { status, data } = await api("GET", "/api/review/targets");
+  const list = document.getElementById("rv-list");
+  if (status !== 200) {
+    RV_TARGETS = null;
+    document.getElementById("rv-target").innerHTML = "";
+    list.innerHTML = `<p class="muted">${t("rv.no_map")}</p>`;
+    return;
+  }
+  RV_TARGETS = data;
+  fillTargetOptions();
+  updateKindHelp();
+  loadFindings();
+}
+
+function fillTargetOptions() {
+  const type = document.getElementById("rv-type").value;
+  const sel = document.getElementById("rv-target");
+  sel.innerHTML = "";
+  (RV_TARGETS[type + "s"] || []).forEach((it) => {
+    const o = document.createElement("option");
+    o.value = it.id; o.textContent = `${it.name} (${it.id})`;
+    sel.appendChild(o);
+  });
+}
+
+function currentKind() {
+  const r = document.querySelector('input[name="rvkind"]:checked');
+  return r ? r.value : "reframe";
+}
+
+function updateKindHelp() {
+  document.getElementById("rv-kind-help").textContent =
+    t("rv.kindhelp." + currentKind());
+}
+
+async function addFinding() {
+  const type = document.getElementById("rv-type").value;
+  const sel = document.getElementById("rv-target");
+  const comment = document.getElementById("rv-comment").value.trim();
+  if (!sel.value || !comment) return;
+  const target_name = sel.options[sel.selectedIndex].textContent;
+  const { status, data } = await api("POST", "/api/review/findings", {
+    target_type: type, target_id: sel.value, target_name,
+    kind: currentKind(), comment,
+  });
+  if (status === 201) {
+    document.getElementById("rv-comment").value = "";
+    loadFindings();
+  } else {
+    alert(data.error || "error");
+  }
+}
+
+const KIND_CLASS = { reframe: "k-reframe", audit: "k-audit", proposal: "k-proposal" };
+
+async function loadFindings() {
+  const { status, data } = await api("GET", "/api/review/findings");
+  const list = document.getElementById("rv-list");
+  if (status !== 200) { list.innerHTML = ""; return; }
+  const findings = data.findings || [];
+  if (!findings.length) {
+    list.innerHTML = `<p class="muted">${t("rv.no_findings")}</p>`;
+    return;
+  }
+  list.innerHTML = "";
+  findings.forEach((f) => list.appendChild(findingCard(f)));
+}
+
+function findingCard(f) {
+  const card = document.createElement("div");
+  card.className = "rv-card";
+  const ran = f.status === "done" || f.status === "error";
+  const kindLabel = t("rv.kind." + f.kind);
+  card.innerHTML =
+    `<div class="rv-head">
+       <span class="badge ${KIND_CLASS[f.kind] || ""}">${escapeHtml(kindLabel)}</span>
+       <b>${escapeHtml(f.target_name || f.target_id)}</b>
+       <span class="muted tiny">${escapeHtml(f.target_type)} · ${escapeHtml(f.status)}</span>
+     </div>
+     <div class="rv-comment">${escapeHtml(f.comment)}</div>`;
+  const job = document.createElement("div");
+  job.className = "job"; job.id = "rvjob-" + f.id;
+  card.appendChild(job);
+
+  if (f.result) {
+    const r = document.createElement("div");
+    r.className = "muted tiny"; r.textContent = "→ " + f.result;
+    card.appendChild(r);
+  }
+  if (f.kind === "audit" && f.audit_result) {
+    const pre = document.createElement("pre");
+    pre.className = "out"; pre.style.maxHeight = "160px";
+    pre.textContent = JSON.stringify(f.audit_result, null, 2);
+    card.appendChild(pre);
+  }
+  if (f.kind === "proposal" && f.proposal_ref) {
+    const r = document.createElement("div");
+    r.className = "muted tiny"; r.textContent = f.proposal_ref;
+    card.appendChild(r);
+  }
+
+  const row = document.createElement("div");
+  row.className = "row";
+  const run = document.createElement("button");
+  run.className = "claude";
+  run.textContent = ran ? t("rv.rerun") : t("rv.run");
+  run.onclick = () => runFinding(f.id);
+  const del = document.createElement("button");
+  del.textContent = t("rv.delete");
+  del.onclick = async () => { await api("DELETE", "/api/review/findings/" + f.id); loadFindings(); };
+  row.appendChild(run); row.appendChild(del);
+  card.appendChild(row);
+  return card;
+}
+
+async function runFinding(fid) {
+  const cont = document.getElementById("rv-continue").checked;
+  const { status, data } = await api(
+    "POST", "/api/review/findings/" + fid + "/run", { continue_session: cont });
+  if (status !== 202) { showJob("rvjob-" + fid, { status: "error", error: data.error }); return; }
+  pollJob(data.job_id, "rvjob-" + fid, async () => {
+    await loadFindings();
+    refreshView();   // reframe may have changed the map
+  });
+}
+
 // ---- viewer ------------------------------------------------------------
 function refreshView() {
   const frame = document.getElementById("view-frame");
@@ -352,6 +509,10 @@ function init() {
   document.getElementById("run-render").onclick = runRender;
   document.getElementById("refresh-view").onclick = refreshView;
   document.getElementById("save-config").onclick = saveConfig;
+  document.getElementById("rv-type").onchange = fillTargetOptions;
+  document.getElementById("rv-add").onclick = addFinding;
+  document.querySelectorAll('input[name="rvkind"]').forEach(
+    (r) => (r.onchange = updateKindHelp));
   refreshState().then(() => { showStep("analyze"); refreshView(); });
 }
 

@@ -14,35 +14,34 @@ header .spacer { flex: 1; }
 header .langs { display: flex; align-items: center; gap: 10px; font-size: 12px; }
 header select { font-size: 12px; }
 
-nav#steps { display: flex; gap: 6px; background: #243140; padding: 6px 18px; }
-nav#steps button {
-  background: transparent; color: #cfe0f0; border: 1px solid transparent;
-  padding: 5px 12px; border-radius: 5px; cursor: pointer; font-size: 13px;
-}
-nav#steps button.active { background: #34465a; color: #fff; }
+.topbar-job { font-size: 12px; padding: 4px 18px; background: #2a3a2f; color: #d7e2ee; }
+.topbar-job:empty { display: none; }
 
 main { flex: 1; display: flex; min-height: 0; }
-#panel { width: 46%; overflow: auto; padding: 18px; border-right: 1px solid #e0e4e8; }
 #viewer { flex: 1; display: flex; flex-direction: column; min-width: 0; }
 .viewer-bar {
-  display: flex; align-items: center; justify-content: space-between;
+  display: flex; align-items: center; gap: 12px;
   padding: 6px 12px; background: #eef1f4; font-size: 13px;
 }
+.viewer-bar .spacer { flex: 1; }
 iframe#view-frame { flex: 1; border: 0; background: #fff; }
 
-#init-bar {
-  border: 1px solid #e3c9a3; background: #fffaf2; border-radius: 8px;
-  padding: 12px 14px; margin-bottom: 16px;
+#queue {
+  width: 380px; min-width: 300px; display: flex; flex-direction: column;
+  border-left: 1px solid #e0e4e8; background: #fbfcfd;
 }
-#init-bar .muted { margin: 6px 0 0; }
+.queue-head { padding: 12px 14px; border-bottom: 1px solid #e2e6ea; }
+.queue-head h2 { margin: 0 0 8px; font-size: 15px; }
+#rv-list { flex: 1; overflow: auto; padding: 12px 14px; }
 
 h2 { margin-top: 0; }
 .muted { color: #5a6573; font-size: 13px; }
+.tiny { font-size: 12px; }
 .out {
   background: #0f1620; color: #d7e2ee; padding: 10px; border-radius: 6px;
   font-size: 12px; white-space: pre-wrap; max-height: 240px; overflow: auto;
 }
-.row { display: flex; align-items: center; gap: 10px; margin: 8px 0; }
+.row { display: flex; align-items: center; gap: 8px; margin: 6px 0; flex-wrap: wrap; }
 button {
   font-size: 13px; padding: 6px 12px; border-radius: 5px; cursor: pointer;
   border: 1px solid #c4ccd4; background: #fff;
@@ -53,42 +52,39 @@ button:disabled { opacity: .5; cursor: default; }
 .status { font-size: 12px; color: #1a7f37; }
 .status.err { color: #cf222e; }
 
-textarea.json-edit {
-  width: 100%; min-height: 320px; font-family: ui-monospace, monospace;
-  font-size: 12px; padding: 10px; border: 1px solid #c4ccd4; border-radius: 6px;
-}
-.job { font-size: 12px; margin: 8px 0; }
+.job { font-size: 12px; margin: 6px 0; }
 .job .line { color: #5a6573; }
 .job .spin { color: #b45309; }
+.job:empty { display: none; }
 
-ul#area-list { list-style: none; padding: 0; }
-ul#area-list li {
-  display: flex; align-items: center; justify-content: space-between;
-  border: 1px solid #e2e6ea; border-radius: 6px; padding: 8px 12px; margin-bottom: 8px;
-}
-ul#area-list .meta { font-size: 12px; color: #5a6573; }
 .badge { font-size: 11px; padding: 1px 7px; border-radius: 4px; background: #eef1f4; }
-.badge.done { background: #d8f3df; color: #1a7f37; }
 
-#area-editor .field { margin-bottom: 8px; }
-#area-editor label { display: block; font-size: 12px; color: #5a6573; }
-#area-editor input, #area-editor textarea {
-  width: 100%; padding: 5px 8px; border: 1px solid #c4ccd4; border-radius: 5px;
-  font-size: 13px;
-}
-
-/* Review panel */
-.tiny { font-size: 12px; }
-.review-add { border: 1px solid #e2e6ea; border-radius: 8px; padding: 12px;
-  margin-bottom: 16px; background: #fbfcfd; }
-.review-add select, .review-add textarea { font-size: 13px; padding: 5px 8px;
-  border: 1px solid #c4ccd4; border-radius: 5px; }
-.review-add textarea { width: 100%; }
-#rv-kind-help { margin: 4px 0 8px; }
+/* Finding cards in the queue */
 .rv-card { border: 1px solid #e2e6ea; border-radius: 8px; padding: 10px 12px;
-  margin-bottom: 10px; }
-.rv-head { display: flex; align-items: baseline; gap: 8px; }
+  margin-bottom: 10px; background: #fff; }
+.rv-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
 .rv-comment { margin: 6px 0; font-size: 14px; }
 .badge.k-reframe { background: #e5eefc; color: #1f4f9c; }
 .badge.k-audit { background: #fdeede; color: #9a6700; }
 .badge.k-proposal { background: #e9f5ea; color: #1a7f37; }
+
+/* Inline finding popover */
+.pop {
+  position: fixed; top: 80px; right: 400px; width: 340px; z-index: 50;
+  background: #fff; border: 1px solid #9db4cc; border-radius: 10px;
+  box-shadow: 0 8px 28px rgba(0,0,0,.18); padding: 12px 14px;
+}
+.pop-head { display: flex; align-items: center; justify-content: space-between; }
+.pop-head .x { border: 0; background: transparent; font-size: 18px; cursor: pointer; }
+.pop textarea {
+  width: 100%; font-size: 13px; padding: 6px 8px; margin: 6px 0;
+  border: 1px solid #c4ccd4; border-radius: 6px;
+}
+#rv-kind-help { margin: 2px 0 4px; }
+
+/* CRUD-style sub-tabs (also used by the popover kind picker) */
+.subtabs { display: flex; gap: 6px; margin: 6px 0; flex-wrap: wrap; }
+.subtabs label { font-size: 13px; padding: 3px 10px; border: 1px solid #c4ccd4;
+  border-radius: 6px; cursor: pointer; background: #fff; }
+.subtabs input { display: none; }
+.subtabs input:checked + label { background: #2563eb; color: #fff; border-color: #2563eb; }

@@ -113,34 +113,22 @@ dra setup --repo-root /path/to/target      # choose ui_lang / content_lang / pro
 dra serve --repo-root /path/to/target      # opens http://127.0.0.1:5178/app/
 ```
 
-In the browser, the fastest path is **Initialize all with Claude** at the top:
-it runs the whole pipeline as one job — analyze → area tree → area cards →
-merge → validate → render — and reports progress live (elapsed time, the
-Claude process id, and its CPU/memory, so you can see the session is alive).
-Transient Claude API errors are retried; an area that still fails is skipped
-and reported so the run finishes with a partial map you can complete later.
-When it finishes you stay in the same session and adjust any step
-individually.
+The UI is a **map preview + a review queue**. The flow is:
 
-Or step through manually:
-
-1. **Analyze** — inventory the repo's files and directories (mechanical, no
-   Claude; no table/route guessing).
-2. **Area tree** — *Generate with Claude*: Claude writes `area-tree.json`.
-   You can edit the JSON inline and save it back.
-3. **Area cards** — per area, *Generate with Claude*: Claude writes each
-   `area-maps/<id>.json`.
-4. **Map & view** — merge, validate, render. Edit any area's fields and save;
-   the change is **written back to `meaning-map.json`** and the preview
-   refreshes.
-
-The rendered map shows: business areas as a grid of clickable boxes that
-expand to detail; **concept data** (physical tables grouped by business
-meaning) with the areas that use them; and **CRUD** viewable both *by area*
-and *by concept* (the same concept-centric data, two directions).
-
-5. **Review** — point at an actor, concept, or area and add a remark. Each
-   remark (a *finding*) has one of three kinds, processed differently:
+1. **Initialize all with Claude** (button in the header) — runs the whole
+   pipeline as one job (analyze → area tree → area cards → merge → validate →
+   render) and reports progress live (elapsed time, the Claude process id, and
+   its CPU/memory, so you can see the session is alive). Transient Claude API
+   errors are retried; an area that still fails is skipped and reported so the
+   run finishes with a partial map you can complete later.
+2. **Read the preview** on the left. It shows actors (first), **concept data**
+   (physical tables grouped by business meaning) with the areas that use them,
+   business areas as clickable boxes, and **CRUD** viewable both *by area* and
+   *by concept*.
+3. **Add findings inline**: click the **+** on any actor, concept, or area to
+   open a small popover, pick a kind, write a remark, and either *Add to queue*
+   or *Add & run*. Each finding (a remark) has one of three kinds, processed
+   differently:
 
    | Kind | What Claude does | Where it goes |
    | --- | --- | --- |
@@ -148,9 +136,11 @@ and *by concept* (the same concept-centric data, two directions).
    | **audit** | check for contradictions / cases it can't explain | writes `audits/<id>.json`; map unchanged |
    | **proposal** | record a desired future change | writes `proposals/<id>.md`; as-is map unchanged |
 
-   Toggle **continue Claude session** to keep context across findings, or
-   leave it off to run each in a fresh session. Findings persist in
-   `.dramaturgy/reviews.json`.
+4. **Process the queue** on the right: run findings individually, or **Run
+   queued** to process all open ones in order. Toggle **continue Claude
+   session** to keep context across findings, or leave it off to run each in a
+   fresh session. Findings persist in `.dramaturgy/reviews.json`; after a
+   reframe the preview refreshes automatically.
 
 ## Usage — inside Claude Code
 

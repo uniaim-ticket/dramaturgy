@@ -76,6 +76,14 @@ th { background: #f0f3f6; }
 .crud .off { color: #cbd2d9; }
 code { background: #f0f3f6; padding: 1px 4px; border-radius: 3px; font-size: 12px; }
 .muted { color: #8b95a1; }
+
+/* Inline review pins: a small + on each reviewable item. */
+.rv-pin { border: 1px solid #c4ccd4; background: #fff; color: #2563eb;
+  border-radius: 50%; width: 18px; height: 18px; line-height: 15px;
+  font-size: 13px; padding: 0; margin-left: 6px; cursor: pointer;
+  vertical-align: middle; }
+.rv-pin:hover { background: #2563eb; color: #fff; border-color: #2563eb; }
+
 .subtabs { display: flex; gap: 8px; margin-bottom: 12px; }
 .subtabs label { font-size: 13px; padding: 4px 12px; border: 1px solid #c4ccd4;
   border-radius: 6px; cursor: pointer; background: #fff; }
@@ -103,6 +111,20 @@ def conf_badge(cat: Catalog, level: str) -> str:
     if not level:
         return ""
     return f'<span class="conf-{e(level)}">{e(cat.t(f"confidence.{level}"))}</span>'
+
+
+def pin(target_type: str, target_id: str, target_name: str) -> str:
+    """A small inline button to attach a review finding to an item.
+
+    Clicking it postMessages the parent app (the dramaturgy UI), which opens
+    the inline finding popover. Harmless (no-op) when the HTML is opened
+    standalone outside the app.
+    """
+    return (
+        f'<button class="rv-pin" title="review"'
+        f' data-rv-type="{e(target_type)}"'
+        f' data-rv-id="{e(target_id)}"'
+        f' data-rv-name="{e(target_name)}">+</button>')
 
 
 def crud_cells(ops) -> str:
@@ -174,7 +196,8 @@ def render_area_box(cat: Catalog, area: dict, concepts: dict) -> str:
            if area.get("confidence") == "low" else "")
     return (
         f'<details class="box" id="area-{e(area.get("id"))}">'
-        f'<summary><span class="sum-name">{e(area.get("name"))}</span>'
+        f'<summary><span class="sum-name">{e(area.get("name"))}'
+        f'{pin("area", area.get("id"), area.get("name"))}</span>'
         f'<span class="sum-id">{e(area.get("id"))}</span></summary>'
         f'<div class="body"><p>{e(area.get("one_liner"))}</p>'
         f'<dl class="kv">{kv}</dl>{low}</div></details>')
@@ -195,7 +218,8 @@ def render_concept_tables(cat: Catalog, concepts: list, areas: dict) -> str:
     for c in concepts:
         area_links = [_area_name(areas, aid) for aid in c.get("related_areas", [])]
         rows += (
-            f"<tr><td><b>{e(c.get('name'))}</b><br>"
+            f"<tr><td><b>{e(c.get('name'))}</b>"
+            f"{pin('concept', c.get('id'), c.get('name'))}<br>"
             f"<span class='muted'>{e(c.get('description'))}</span></td>"
             f"<td>{tags(c.get('physical_tables'), 'phys')}</td>"
             f"<td>{tags(area_links, 'area')}</td>"
@@ -263,7 +287,8 @@ def render_actors(cat: Catalog, actors: list) -> str:
             for act in a.get("actions", []))
         cards.append(
             f'<div class="box" style="padding:14px;margin-bottom:12px">'
-            f'<h3 style="margin:0 0 6px">{e(a.get("name"))}</h3>'
+            f'<h3 style="margin:0 0 6px">{e(a.get("name"))}'
+            f'{pin("actor", a.get("id"), a.get("name"))}</h3>'
             f'<p>{e(a.get("description"))}</p><ul>{actions}</ul></div>')
     return "".join(cards) or f'<p class="muted">{e(cat.t("empty.none"))}</p>'
 
@@ -302,9 +327,10 @@ def render_html(mm: dict, ui_lang: str) -> str:
         lang_note = (f'<div class="meta">'
                      f'{e(cat.t("note.content_lang", content_lang=content_lang))}</div>')
 
+    # Actors first: that is the usual entry point for review.
     nav_items = [
-        ("areas", "nav.areas"), ("concepts", "nav.concepts"),
-        ("crud", "nav.crud"), ("actors", "nav.actors"),
+        ("actors", "nav.actors"), ("concepts", "nav.concepts"),
+        ("areas", "nav.areas"), ("crud", "nav.crud"),
         ("dev", "nav.dev"), ("validation", "nav.validation"),
     ]
     nav = "".join(f'<a href="#{anchor}">{e(cat.t(key))}</a>'
@@ -316,14 +342,14 @@ def render_html(mm: dict, ui_lang: str) -> str:
     area_map = {a["id"]: a for a in areas}
 
     sections = [
-        f'<section id="areas"><h2>{e(cat.t("nav.areas"))}</h2>'
-        f'{render_areas(cat, areas, concept_map)}</section>',
-        f'<section id="concepts"><h2>{e(cat.t("nav.concepts"))}</h2>'
-        f'{render_concept_tables(cat, concepts, area_map)}</section>',
-        f'<section id="crud"><h2>{e(cat.t("nav.crud"))}</h2>'
-        f'{render_crud(cat, areas, concepts)}</section>',
         f'<section id="actors"><h2>{e(cat.t("nav.actors"))}</h2>'
         f'{render_actors(cat, mm.get("actors", []))}</section>',
+        f'<section id="concepts"><h2>{e(cat.t("nav.concepts"))}</h2>'
+        f'{render_concept_tables(cat, concepts, area_map)}</section>',
+        f'<section id="areas"><h2>{e(cat.t("nav.areas"))}</h2>'
+        f'{render_areas(cat, areas, concept_map)}</section>',
+        f'<section id="crud"><h2>{e(cat.t("nav.crud"))}</h2>'
+        f'{render_crud(cat, areas, concepts)}</section>',
         f'<section id="dev"><h2>{e(cat.t("nav.dev"))}</h2>'
         f'{render_dev(cat, areas)}</section>',
         f'<section id="validation"><h2>{e(cat.t("nav.validation"))}</h2>'
@@ -345,6 +371,18 @@ def render_html(mm: dict, ui_lang: str) -> str:
 {lang_note}</header>
 <nav>{nav}</nav>
 <main>{"".join(sections)}</main>
+<script>
+// Inline review: clicking a + pin tells the parent app to open the finding
+// popover for that item. No-op when opened standalone (no parent listener).
+document.addEventListener('click', function (ev) {{
+  var b = ev.target.closest('.rv-pin');
+  if (!b) return;
+  ev.preventDefault();
+  var msg = {{ source: 'dramaturgy-review', target_type: b.dataset.rvType,
+    target_id: b.dataset.rvId, target_name: b.dataset.rvName }};
+  if (window.parent && window.parent !== window) window.parent.postMessage(msg, '*');
+}});
+</script>
 </body>
 </html>
 """

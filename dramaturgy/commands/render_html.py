@@ -36,6 +36,10 @@ nav { position: sticky; top: 0; background: #243140; padding: 0 24px;
   overflow-x: auto; white-space: nowrap; z-index: 10; }
 nav a { color: #cfe0f0; text-decoration: none; font-size: 13px; }
 nav a:hover { color: #fff; }
+/* Developer-only items (code refs, APIs, screens, validation): hidden for
+   non-developers, revealed when the app shell adds `dev` to <body>. */
+.dev-only { display: none; }
+body.dev .dev-only { display: revert; }
 main { max-width: 1100px; margin: 0 auto; padding: 24px; }
 section { background: #fff; border: 1px solid #e2e6ea; border-radius: 8px;
   padding: 20px; margin-bottom: 24px; }
@@ -391,22 +395,26 @@ def render_area_box(cat: Catalog, area: dict, concepts: dict,
     # Parent/children are conveyed structurally (banner + nested boxes), so
     # they are not repeated as key-value rows here. Related areas stay, since
     # they are not a hierarchy relationship.
+    # (field key, label, rendered value, dev_only). dev_only rows (related
+    # code/APIs/screens) are hidden unless the app shell enables developer mode.
     rows = [
-        ("purpose", cat.t("label.purpose"), e(area.get("purpose")) or "—"),
-        ("related", cat.t("label.related"), area_tags(area.get("related_area_ids"))),
-        ("actors", cat.t("label.actors"), f"<ul>{actor_lines}</ul>" if actor_lines else "—"),
-        ("crud", cat.t("label.crud"), crud_block),
-        ("flows", cat.t("label.flows"), f"<ul>{flows}</ul>" if flows else "—"),
-        ("apis", cat.t("label.apis"), tags(area.get("apis"))),
-        ("screens", cat.t("label.screens"), tags(area.get("screens"))),
+        ("purpose", cat.t("label.purpose"), e(area.get("purpose")) or "—", False),
+        ("related", cat.t("label.related"), area_tags(area.get("related_area_ids")), False),
+        ("actors", cat.t("label.actors"), f"<ul>{actor_lines}</ul>" if actor_lines else "—", False),
+        ("crud", cat.t("label.crud"), crud_block, False),
+        ("flows", cat.t("label.flows"), f"<ul>{flows}</ul>" if flows else "—", False),
+        ("apis", cat.t("label.apis"), tags(area.get("apis")), True),
+        ("screens", cat.t("label.screens"), tags(area.get("screens")), True),
         ("code_refs", cat.t("label.code_refs"),
-         " ".join(f"<code>{e(r)}</code>" for r in area.get("code_refs", [])) or "—"),
-        ("risk_points", cat.t("label.risk_points"), tags(area.get("risk_points"))),
-        ("open_questions", cat.t("label.open_questions"), tags(area.get("open_questions"))),
-        ("confidence", cat.t("label.confidence"), conf_badge(cat, area.get("confidence"))),
+         " ".join(f"<code>{e(r)}</code>" for r in area.get("code_refs", [])) or "—", True),
+        ("risk_points", cat.t("label.risk_points"), tags(area.get("risk_points")), False),
+        ("open_questions", cat.t("label.open_questions"), tags(area.get("open_questions")), False),
+        ("confidence", cat.t("label.confidence"), conf_badge(cat, area.get("confidence")), False),
     ]
     kv = "".join(
-        f"<dt>{k}{apin(fkey, k)}</dt><dd>{v}</dd>" for fkey, k, v in rows)
+        (f'<dt class="dev-only">{k}{apin(fkey, k)}</dt><dd class="dev-only">{v}</dd>'
+         if dev else f"<dt>{k}{apin(fkey, k)}</dt><dd>{v}</dd>")
+        for fkey, k, v, dev in rows)
     low = (f'<div class="low-note">{e(cat.t("note.low_confidence"))}</div>'
            if area.get("confidence") == "low" else "")
 
@@ -801,14 +809,17 @@ def render_html(mm: dict, ui_lang: str, vocab: dict | None = None) -> str:
         lang_note = (f'<p class="muted tiny">'
                      f'{e(cat.t("note.content_lang", content_lang=content_lang))}</p>')
 
+    # (anchor, label key, dev_only). The validation view is developer-facing.
     nav_items = [
-        ("actors", "nav.actors"), ("areas", "nav.areas"),
-        ("concepts", "nav.concepts"), ("classifications", "nav.classifications"),
-        ("crud", "nav.crud"), ("components", "nav.components"),
-        ("validation", "nav.validation"),
+        ("actors", "nav.actors", False), ("areas", "nav.areas", False),
+        ("concepts", "nav.concepts", False),
+        ("classifications", "nav.classifications", False),
+        ("crud", "nav.crud", False), ("components", "nav.components", False),
+        ("validation", "nav.validation", True),
     ]
-    nav = "".join(f'<a href="#{anchor}">{e(cat.t(key))}</a>'
-                  for anchor, key in nav_items)
+    nav = "".join(
+        f'<a href="#{anchor}"{" class=\"dev-only\"" if dev else ""}>{e(cat.t(key))}</a>'
+        for anchor, key, dev in nav_items)
 
     areas = mm.get("areas", [])
     concepts = mm.get("concepts", [])
@@ -829,7 +840,7 @@ def render_html(mm: dict, ui_lang: str, vocab: dict | None = None) -> str:
         f'{render_crud(cat, areas, concepts)}</section>',
         f'<section id="components"><h2>{e(cat.t("nav.components"))}</h2>'
         f'{render_components(cat, mm.get("components", []))}</section>',
-        f'<section id="validation"><h2>{e(cat.t("nav.validation"))}</h2>'
+        f'<section id="validation" class="dev-only"><h2>{e(cat.t("nav.validation"))}</h2>'
         f'{render_validation(cat, mm)}</section>',
     ]
 
@@ -845,6 +856,18 @@ def render_html(mm: dict, ui_lang: str, vocab: dict | None = None) -> str:
 <nav>{nav}</nav>
 <main>{lang_note}{"".join(sections)}</main>
 <script>
+// Developer mode: hides/shows developer-facing items (code refs, APIs,
+// screens, validation). Initial state comes from the ?dev=1 query (so it
+// survives iframe refreshes); the app shell also toggles it via postMessage.
+(function () {{
+  function setDev(on) {{ document.body.classList.toggle('dev', !!on); }}
+  setDev(/[?&]dev=1\\b/.test(location.search));
+  window.addEventListener('message', function (ev) {{
+    var d = ev.data;
+    if (d && d.source === 'dramaturgy-shell' && d.type === 'dev-mode') setDev(d.on);
+  }});
+}})();
+
 // Inline review: clicking a + pin tells the parent app to open the finding
 // popover for that item. No-op when opened standalone (no parent listener).
 document.addEventListener('click', function (ev) {{

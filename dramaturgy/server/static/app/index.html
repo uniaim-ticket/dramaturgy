@@ -9,18 +9,19 @@
 <body>
 <header>
   <h1>dramaturgy</h1>
+  <button id="toggle-dev" data-i="dev.toggle" aria-pressed="false">Developer mode</button>
   <div class="sub" id="repo-info"></div>
   <div class="spacer"></div>
-  <button id="toggle-init-instr" data-i="init.instr_toggle">Instructions</button>
-  <button id="run-init" class="claude" data-i="init.run">Initialize all with Claude</button>
-  <div class="langs">
+  <button id="toggle-init-instr" class="dev-only" data-i="init.instr_toggle">Instructions</button>
+  <button id="run-init" class="claude dev-only" data-i="init.run">Initialize all with Claude</button>
+  <div class="langs dev-only">
     <label>ui <select id="ui-lang"><option>ja</option><option>en</option></select></label>
     <label>content <select id="content-lang"><option>ja</option><option>en</option></select></label>
     <button id="save-config" data-i="btn.save_config">Save</button>
   </div>
 </header>
 
-<div id="init-instr-bar" hidden>
+<div id="init-instr-bar" class="dev-only" hidden>
   <label class="tiny" data-i="init.instr_label">Additional instructions for Claude (saved per repository, reused on every initialization):</label>
   <textarea id="init-instr" rows="3" placeholder="例: マスタ・トランザクションの区分をタグ付けしてください"></textarea>
   <div class="row">

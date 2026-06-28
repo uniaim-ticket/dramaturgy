@@ -599,6 +599,46 @@ class OverviewFlowTests(unittest.TestCase):
         self.assertIn('href="#area-admin-operation"', card)
 
 
+class DeveloperModeTests(unittest.TestCase):
+    """Developer-facing items (code refs / APIs / screens / validation) are
+    emitted but marked dev-only, so the app shell can hide them for
+    non-developers via CSS without a re-render."""
+
+    def _html(self):
+        from dramaturgy.commands.render_html import render_html
+        mm = {
+            "content_lang": "ja", "system": {"name": "S"},
+            "areas": [{"id": "a1", "name": "領域1", "one_liner": "x",
+                       "concept_crud": [], "related_area_ids": [],
+                       "child_area_ids": [], "apis": ["/api/x"],
+                       "screens": ["S1"], "code_refs": ["app/x.rb"]}],
+            "concepts": [], "classifications": [], "components": [],
+            "actors": [], "flows": [], "validations": ["v1"]}
+        return render_html(mm, "ja")
+
+    def test_dev_rows_and_validation_marked_dev_only(self):
+        html = self._html()
+        # The validation section and its nav link are developer-only.
+        self.assertIn('id="validation" class="dev-only"', html)
+        self.assertIn('<a href="#validation" class="dev-only"', html)
+        # Area dev rows (APIs / screens / code refs) are wrapped dev-only.
+        card = html.split('id="area-a1"')[1].split("</details>")[0]
+        self.assertIn('<dt class="dev-only">関連API', card)
+        self.assertIn('<dt class="dev-only">関連コード', card)
+        # Non-dev rows are not wrapped.
+        self.assertIn('<dt>目的', card)
+
+    def test_dev_mode_css_and_iframe_toggle_present(self):
+        html = self._html()
+        # Hidden by default; revealed only when <body> has the dev class.
+        self.assertIn(".dev-only { display: none; }", html)
+        self.assertIn("body.dev .dev-only { display: revert; }", html)
+        # The iframe self-initializes from ?dev=1 and listens for the shell's
+        # toggle message.
+        self.assertIn("dramaturgy-shell", html)
+        self.assertIn("dev=1", html)
+
+
 class SourceHintsRobustnessTests(unittest.TestCase):
     """source_hints may arrive as a dict (normal), a bare list/string, or be
     missing — Claude's output varies. match_files must tolerate all."""

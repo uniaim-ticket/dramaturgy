@@ -11,6 +11,17 @@ header {
 header h1 { margin: 0; font-size: 18px; }
 header .sub { font-size: 12px; opacity: .75; }
 header .spacer { flex: 1; }
+
+/* Developer-only controls: hidden until developer mode is on. */
+.dev-only { display: none !important; }
+body.dev .dev-only { display: revert !important; }
+body.dev header .langs.dev-only { display: flex !important; }
+/* The instructions bar also obeys its own `hidden` attribute when shown. */
+body.dev #init-instr-bar.dev-only[hidden] { display: none !important; }
+/* Developer-mode toggle button (always visible, next to the title). */
+#toggle-dev { font-size: 12px; padding: 4px 10px; background: #2a3a4c;
+  color: #cfe0f0; border: 1px solid #45566a; }
+body.dev #toggle-dev { background: #b45309; color: #fff; border-color: #b45309; }
 header .langs { display: flex; align-items: center; gap: 10px; font-size: 12px; }
 /* Header language selects styled like the combobox controls (dark theme). */
 header select {

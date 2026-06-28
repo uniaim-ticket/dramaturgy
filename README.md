@@ -115,6 +115,14 @@ dra serve --repo-root /path/to/target      # opens http://127.0.0.1:5178/app/
 
 The UI is a **map preview + a review queue**. The flow is:
 
+The **Developer mode** button (top-left, next to the title) toggles the
+developer-facing items together: an area card's code refs / related APIs /
+related screens and the validation section, plus the generation controls
+(extra instructions, Initialize all with Claude, language selection and save).
+It is off by default (non-developer view) and the choice is remembered in the
+browser. **The finding queue works in either mode.** The steps below assume
+developer mode is on:
+
 1. **Initialize all with Claude** (button in the header) — runs the whole
    pipeline as one job (analyze → area tree → subdivide review → area cards →
    merge → validate → render) and reports progress live (elapsed time, the

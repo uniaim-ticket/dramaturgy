@@ -5,6 +5,7 @@
 const I18N = {
   ja: {
     "btn.save_config": "保存",
+    "dev.toggle": "開発者モード",
     "init.run": "Claudeで一括初期化",
     "init.instr_toggle": "追加指示",
     "init.instr_label": "Claudeへの追加指示（リポジトリごとに保存し、毎回の一括初期化で再利用されます）:",
@@ -34,6 +35,7 @@ const I18N = {
   },
   en: {
     "btn.save_config": "Save",
+    "dev.toggle": "Developer mode",
     "init.run": "Initialize all with Claude",
     "init.instr_toggle": "Instructions",
     "init.instr_label": "Additional instructions for Claude (saved per repository, reused on every initialization):",
@@ -65,6 +67,31 @@ const I18N = {
 
 let UI_LANG = "ja";
 const t = (key) => (I18N[UI_LANG] && I18N[UI_LANG][key]) || key;
+
+// ---- developer mode ----------------------------------------------------
+// Hides developer-facing items (code refs / APIs / screens / validation, and
+// the generation controls) for non-developers. Persisted locally so it
+// sticks across reloads. The preview iframe mirrors it via ?dev= and a
+// postMessage toggle. The finding queue stays usable in either mode.
+let DEV_MODE = localStorage.getItem("dramaturgy.dev") === "1";
+
+function applyDevMode() {
+  document.body.classList.toggle("dev", DEV_MODE);
+  const btn = document.getElementById("toggle-dev");
+  if (btn) btn.setAttribute("aria-pressed", DEV_MODE ? "true" : "false");
+  // Tell the preview iframe to show/hide its developer items live.
+  const frame = document.getElementById("view-frame");
+  if (frame && frame.contentWindow) {
+    frame.contentWindow.postMessage(
+      { source: "dramaturgy-shell", type: "dev-mode", on: DEV_MODE }, "*");
+  }
+}
+
+function toggleDevMode() {
+  DEV_MODE = !DEV_MODE;
+  localStorage.setItem("dramaturgy.dev", DEV_MODE ? "1" : "0");
+  applyDevMode();
+}
 
 function applyI18n() {
   document.querySelectorAll("[data-i]").forEach((el) => {
@@ -445,7 +472,8 @@ async function manageVocab() {
 // ---- viewer ------------------------------------------------------------
 function refreshView() {
   const frame = document.getElementById("view-frame");
-  frame.src = apiUrl("/api/view") + "?_=" + Date.now();
+  // Carry dev mode in the query so the freshly-loaded iframe starts correct.
+  frame.src = apiUrl("/api/view") + "?_=" + Date.now() + (DEV_MODE ? "&dev=1" : "");
 }
 
 function setQueueVisible(visible) {
@@ -471,6 +499,10 @@ async function saveConfig() {
 
 // ---- wire up -----------------------------------------------------------
 function init() {
+  // Reflect the persisted dev-mode state immediately (before the first view
+  // load) so non-developer chrome is correct from the start.
+  applyDevMode();
+  document.getElementById("toggle-dev").onclick = toggleDevMode;
   document.getElementById("run-init").onclick = runInit;
   document.getElementById("toggle-init-instr").onclick = toggleInitInstructions;
   document.getElementById("save-init-instr").onclick = saveInitInstructions;

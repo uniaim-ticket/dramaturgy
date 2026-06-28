@@ -269,6 +269,25 @@ class ConceptCrudTests(unittest.TestCase):
         self.assertEqual(by_area, {"sales": "CRU", "admin": "RUD"})
         self.assertEqual(sorted(order["related_areas"]), ["admin", "sales"])
 
+    def test_crud_table_rows_and_jump_links(self):
+        from dramaturgy.commands.merge_maps import merge
+        from dramaturgy.commands.render_html import render_html
+
+        class _UI:
+            def t(self, *a, **k):
+                return ""
+        merged, _ = merge(list(self._two_area_maps()), _UI())
+        html = render_html(merged, "ja")
+        crud = html.split('id="crud"')[1].split("</section>")[0]
+        # One row per (area, concept) pairing, each carrying sort indexes.
+        self.assertEqual(crud.count('class="crud-row"'), 3)
+        self.assertIn("data-aorder=", crud)
+        self.assertIn("data-corder=", crud)
+        # Subtle jump links to the area and concept sections.
+        self.assertIn('href="#area-sales"', crud)
+        self.assertIn('href="#concept-order"', crud)
+        self.assertIn('class="jump"', crud)
+
     def test_render_shows_boxes_concepts_and_dual_crud(self):
         from dramaturgy.commands.merge_maps import merge
         from dramaturgy.commands.render_html import render_html
@@ -285,9 +304,11 @@ class ConceptCrudTests(unittest.TestCase):
         # Concept-tables section shows physical tables.
         self.assertIn("orders", html)
         self.assertIn("order_items", html)
-        # Dual CRUD toggle present, both directions rendered.
-        self.assertIn("crud-by-area", html)
-        self.assertIn("crud-by-concept", html)
+        # CRUD: a single sortable/filterable table of area×concept rows.
+        self.assertIn('id="crud-sort"', html)
+        self.assertIn('id="crud-filter-area"', html)
+        self.assertIn('id="crud-filter-concept"', html)
+        self.assertIn('class="crud-row"', html)
 
 
 class ClassificationComponentTests(unittest.TestCase):

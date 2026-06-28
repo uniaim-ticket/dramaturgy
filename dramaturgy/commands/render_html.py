@@ -139,15 +139,13 @@ code { background: #f0f3f6; padding: 1px 4px; border-radius: 3px; font-size: 12p
   vertical-align: middle; }
 .rv-pin:hover { background: #2563eb; color: #fff; border-color: #2563eb; }
 
-.subtabs { display: flex; gap: 8px; margin-bottom: 12px; }
-.subtabs label { font-size: 13px; padding: 4px 12px; border: 1px solid #c4ccd4;
-  border-radius: 6px; cursor: pointer; background: #fff; }
-.subtabs input { display: none; }
-.subtabs input:checked + label { background: #2563eb; color: #fff; border-color: #2563eb; }
-/* CSS-only toggle between the two CRUD views. */
-#crud-by-area, #crud-by-concept { display: none; }
-#crud-pick-area:checked ~ #crud-by-area { display: block; }
-#crud-pick-concept:checked ~ #crud-by-concept { display: block; }
+/* CRUD table controls (sort + filters) */
+.crud-controls { display: flex; gap: 16px; flex-wrap: wrap; margin: 8px 0 12px;
+  font-size: 13px; color: #41506a; }
+.crud-controls select { font-size: 13px; }
+/* Subtle jump link at the end of an area / concept cell. */
+a.jump { color: #b6bfca; text-decoration: none; margin-left: 4px; font-size: 11px; }
+a.jump:hover { color: #2563eb; }
 """
 
 
@@ -478,58 +476,68 @@ def render_concept_tables(cat: Catalog, concepts: list, areas: dict,
 
 
 def render_crud(cat: Catalog, areas: list, concepts: list) -> str:
-    """Two views of the same concept-centric CRUD data."""
+    """One sortable/filterable table of (area × concept) CRUD rows.
+
+    Each row carries data-area/data-concept (and -order indexes) so the inline
+    controls can sort by concept or by area and filter to a chosen concept or
+    area. Concept and area cells end with a subtle jump link to their section.
+    """
     area_map = {a["id"]: a for a in areas}
     concept_map = {c["id"]: c for c in concepts}
+    # Appearance order = index in the canonical lists (stable, == "登場順").
+    area_order = {a["id"]: i for i, a in enumerate(areas)}
+    concept_order = {c["id"]: i for i, c in enumerate(concepts)}
 
-    # A CRUD cell is an area×concept pairing; scope a finding to the area
-    # with a crud:<concept_id> field (matching the per-area CRUD pins).
-    def crud_pin(area, cid):
-        cname = _concept_name(concept_map, cid)
-        return pin("area", area.get("id"), area.get("name"),
-                   "crud:" + str(cid), f"CRUD / {cname}")
+    def jump(anchor, label):
+        return (f'<a class="jump" href="#{e(anchor)}" '
+                f'title="{e(label)}">↗</a>')
 
-    # By area: flat table area | concept | CRUD.
-    flat_area = ""
+    rows = ""
     for area in areas:
+        aid = area.get("id")
         for entry in area.get("concept_crud", []) or []:
             cid = entry.get("concept_id")
-            flat_area += (f"<tr><td>{e(area.get('name'))}</td>"
-                          f"<td>{e(_concept_name(concept_map, cid))}</td>"
-                          f"<td>{crud_cells(entry.get('ops', ''))}"
-                          f"{crud_pin(area, cid)}</td></tr>")
-    by_area = (
-        f"<table><tr><th>{e(cat.t('nav.areas'))}</th>"
-        f"<th>{e(cat.t('label.concept_table'))}</th><th>CRUD</th></tr>"
-        f"{flat_area}</table>" if flat_area
-        else f'<p class="muted">{e(cat.t("empty.none"))}</p>')
+            cname = _concept_name(concept_map, cid)
+            p = pin("area", aid, area.get("name"),
+                    "crud:" + str(cid), f"CRUD / {cname}")
+            rows += (
+                f'<tr class="crud-row" data-area="{e(aid)}" data-concept="{e(cid)}" '
+                f'data-aorder="{area_order.get(aid, 9999)}" '
+                f'data-corder="{concept_order.get(cid, 9999)}">'
+                f'<td class="brk">{e(area.get("name"))}'
+                f'{jump("area-" + str(aid), area.get("name"))}</td>'
+                f'<td class="brk">{e(cname)}{jump("concept-" + str(cid), cname)}</td>'
+                f'<td>{crud_cells(entry.get("ops", ""))}{p}</td></tr>')
+    if not rows:
+        return f'<p class="muted">{e(cat.t("empty.none"))}</p>'
 
-    # By concept: rows = concept | area | CRUD (from crud_by_area).
-    flat_concept = ""
-    for c in concepts:
-        for entry in c.get("crud_by_area", []) or []:
-            aid = entry.get("area_id")
-            area = area_map.get(aid, {"id": aid, "name": _area_name(area_map, aid)})
-            flat_concept += (f"<tr><td>{e(c.get('name'))}</td>"
-                             f"<td>{e(_area_name(area_map, aid))}</td>"
-                             f"<td>{crud_cells(entry.get('ops', ''))}"
-                             f"{crud_pin(area, c.get('id'))}</td></tr>")
-    by_concept = (
-        f"<table><tr><th>{e(cat.t('label.concept_table'))}</th>"
-        f"<th>{e(cat.t('nav.areas'))}</th><th>CRUD</th></tr>"
-        f"{flat_concept}</table>" if flat_concept
-        else f'<p class="muted">{e(cat.t("empty.none"))}</p>')
+    # Filter option lists (sorted by appearance order).
+    def options(items, order):
+        opts = f'<option value="*">{e(cat.t("crud.all"))}</option>'
+        for it in sorted(items, key=lambda x: order.get(x["id"], 9999)):
+            opts += f'<option value="{e(it["id"])}">{e(it.get("name") or it["id"])}</option>'
+        return opts
 
-    # CSS-only toggle between the two directions.
-    return (
-        '<input type="radio" name="crudview" id="crud-pick-area" checked>'
-        '<input type="radio" name="crudview" id="crud-pick-concept">'
-        '<div class="subtabs">'
-        f'<label for="crud-pick-area">{e(cat.t("crud.by_area"))}</label>'
-        f'<label for="crud-pick-concept">{e(cat.t("crud.by_concept"))}</label>'
-        '</div>'
-        f'<div id="crud-by-area">{by_area}</div>'
-        f'<div id="crud-by-concept">{by_concept}</div>')
+    controls = (
+        '<div class="crud-controls">'
+        f'<label>{e(cat.t("crud.sort_by"))} '
+        '<select id="crud-sort">'
+        f'<option value="concept">{e(cat.t("label.concept_table"))}</option>'
+        f'<option value="area">{e(cat.t("nav.areas"))}</option>'
+        '</select></label>'
+        f'<label>{e(cat.t("nav.areas"))} '
+        f'<select id="crud-filter-area">{options(areas, area_order)}</select></label>'
+        f'<label>{e(cat.t("label.concept_table"))} '
+        f'<select id="crud-filter-concept">{options(concepts, concept_order)}</select></label>'
+        '</div>')
+
+    table = (
+        '<table id="crud-table"><thead><tr>'
+        f'<th>{e(cat.t("nav.areas"))}</th>'
+        f'<th>{e(cat.t("label.concept_table"))}</th>'
+        f'<th>CRUD</th></tr></thead>'
+        f'<tbody id="crud-tbody">{rows}</tbody></table>')
+    return controls + table
 
 
 def _actor_card(cat: Catalog, a: dict) -> str:
@@ -744,6 +752,37 @@ document.addEventListener('click', function (ev) {{
       row.style.display = (tag === '*' || tags.indexOf(tag) >= 0) ? '' : 'none';
     }});
   }});
+}})();
+
+// CRUD table: sort by concept/area, filter by a chosen area and/or concept.
+(function () {{
+  var tbody = document.getElementById('crud-tbody');
+  if (!tbody) return;
+  var sortSel = document.getElementById('crud-sort');
+  var areaSel = document.getElementById('crud-filter-area');
+  var conceptSel = document.getElementById('crud-filter-concept');
+  var rows = Array.prototype.slice.call(tbody.querySelectorAll('.crud-row'));
+
+  function apply() {{
+    var by = sortSel.value;            // 'concept' | 'area'
+    var fa = areaSel.value, fc = conceptSel.value;
+    var sorted = rows.slice().sort(function (a, b) {{
+      var p = by === 'area'
+        ? ['aorder', 'corder'] : ['corder', 'aorder'];
+      var d = (+a.dataset[p[0]]) - (+b.dataset[p[0]]);
+      return d !== 0 ? d : (+a.dataset[p[1]]) - (+b.dataset[p[1]]);
+    }});
+    sorted.forEach(function (row) {{
+      var ok = (fa === '*' || row.dataset.area === fa) &&
+               (fc === '*' || row.dataset.concept === fc);
+      row.style.display = ok ? '' : 'none';
+      tbody.appendChild(row);   // reorder in place
+    }});
+  }}
+  [sortSel, areaSel, conceptSel].forEach(function (el) {{
+    el.addEventListener('change', apply);
+  }});
+  apply();
 }})();
 </script>
 </body>

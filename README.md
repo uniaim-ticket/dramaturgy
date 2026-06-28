@@ -141,11 +141,12 @@ The UI is a **map preview + a review queue**. The flow is:
      mail kind), kept *out* of concept data. Each is either a detail of a
      concept or a standalone business-rule premise.
    - **Areas** as clickable boxes. Expanding an area shows an **overview
-     business flow as a swimlane** (vertical lanes = the involved actors) so a
-     newcomer can grasp the whole flow at a glance. When an area holds several
-     unrelated use cases, they share the swimlane but are separated by a
-     divider (with the use-case name). Plus **CRUD** viewable *by area* and
-     *by concept*.
+     business flow** (vertical lanes = the involved actors) so a newcomer can
+     grasp the whole flow at a glance. When an area holds several unrelated use
+     cases, they share the diagram but are separated by a divider (with the
+     use-case name). Plus **CRUD**: one table of area×concept rows, sortable by
+     concept or area, filterable by a chosen area/concept, with subtle jump
+     links to each item's section.
    - **Components** — structural systems that are not business actors (load
      balancers, monitoring, cross-cutting middleware).
 3. **Add findings inline**: click the **+** on any actor, concept, or area (or

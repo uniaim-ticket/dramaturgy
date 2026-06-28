@@ -27,6 +27,7 @@
   "concepts.filter_all": "すべて",
   "label.flows": "主要フロー",
   "label.overview_flow": "業務フロー概要（スイムレーン）",
+  "flow.other_usecase": "別のユースケース",
   "label.crud": "CRUD（概念データ別）",
   "label.tables": "関連テーブル",
   "label.apis": "関連API",

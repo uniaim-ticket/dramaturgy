@@ -409,6 +409,37 @@ class OverviewFlowTests(unittest.TestCase):
         html = render_html(mm, "ja")
         self.assertNotIn('class="swimlane"', html)
 
+    def test_unrelated_use_cases_split_by_divider(self):
+        from dramaturgy.commands.render_html import render_html
+        mm = {
+            "content_lang": "ja", "system": {"name": "S"},
+            "areas": [{"id": "ops", "name": "運用", "one_liner": "x",
+                       "concepts": [], "concept_crud": [],
+                       "related_area_ids": [], "child_area_ids": [],
+                       "overview_flow": {
+                           "lanes": ["admin", "system"],
+                           "steps": [
+                               {"lane": "admin", "label": "申請",
+                                "use_case": "マスタ申請承認"},
+                               {"lane": "system", "label": "反映",
+                                "use_case": "マスタ申請承認"},
+                               {"lane": "system", "label": "実行",
+                                "use_case": "バッチ監視"},
+                               {"lane": "admin", "label": "対応",
+                                "use_case": "バッチ監視"}]}}],
+            "concepts": [], "classifications": [], "components": [],
+            "actors": [{"id": "admin", "name": "管理者", "category": "person"},
+                       {"id": "system", "name": "システム", "category": "system"}],
+            "flows": []}
+        html = render_html(mm, "ja")
+        area = html.split('id="area-ops"')[1].split("</details>")[0]
+        # One divider per use case, named, with per-use-case numbering (1,2,1,2).
+        self.assertEqual(area.count('class="sl-divider"'), 2)
+        self.assertIn("マスタ申請承認", area)
+        self.assertIn("バッチ監視", area)
+        nums = [s.split("<")[0] for s in area.split('class="sl-n">')[1:]]
+        self.assertEqual(nums, ["1", "2", "1", "2"])
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

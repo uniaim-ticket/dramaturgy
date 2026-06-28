@@ -85,6 +85,11 @@ td { overflow-wrap: anywhere; }
 .sl-lane:last-child { border-right: 0; }
 .sl-row { display: grid; gap: 0; border-top: 1px solid #eef1f4;
   background-image: none; }
+/* Boundary between unrelated use cases sharing the same area. */
+.sl-divider { border-top: 2px dashed #b9c4d0; background: #f4f6f9;
+  padding: 4px 10px; }
+.sl-uc-name { font-size: 11px; font-weight: 600; color: #41506a; }
+.sl-uc-name.muted { font-weight: 400; color: #8b95a1; }
 /* faint lane separators down the rows */
 .sl-step { margin: 6px; padding: 6px 8px; font-size: 12px; background: #fff;
   border: 1px solid #cdd6e0; border-radius: 6px; }
@@ -229,9 +234,29 @@ def render_swimlane(cat: Catalog, flow: dict, actors: dict) -> str:
     # Header row of lane names.
     cells = "".join(f'<div class="sl-lane">{e(lane_label(ln))}</div>'
                     for ln in lanes)
-    # Each step is one grid row; the box sits in its lane's column.
+    # Steps may belong to different use cases within the same area (e.g.
+    # "master approval" vs. "batch monitoring") that share actors but are not
+    # part of one continuous flow. We keep a single swimlane and draw a
+    # divider (with the use-case name when present) wherever the use case
+    # changes, restarting the step numbering for each use case.
     rows = ""
-    for n, s in enumerate(steps, 1):
+    _UNSET = object()
+    prev_uc = _UNSET
+    n = 0
+    for s in steps:
+        uc = s.get("use_case")
+        if uc != prev_uc:
+            # Boundary between use cases that share this area but aren't one
+            # continuous flow. Draw a divider with the use-case name; skip it
+            # only at the very top when the first group is unnamed.
+            if rows or uc:
+                name = (e(uc) if uc else e(cat.t("flow.other_usecase")))
+                cls = "sl-uc-name" + ("" if uc else " muted")
+                rows += (f'<div class="sl-divider">'
+                         f'<span class="{cls}">{name}</span></div>')
+            prev_uc = uc
+            n = 0
+        n += 1
         ln = s.get("lane")
         col = lane_idx.get(ln, 0) + 1
         label = s.get("label") or s.get("action") or ""

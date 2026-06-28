@@ -60,8 +60,15 @@ Overview business flow (important):
   over brevity.
 - Use a **swimlane** shape: `lanes` is the ordered list of involved actors
   (vertical lanes, by actor_id); each `steps` entry is
-  `{lane: <actor_id>, label: "short action"}`, in the order things happen.
+  `{lane: <actor_id>, label: "short action", use_case: "use case name"}`, in
+  the order things happen.
 - Lanes must use actor ids (people/actors, not components).
+- **Important: one area can contain several unrelated use cases / scenarios**
+  (e.g. "master-approval" and "batch-monitoring"). Do NOT merge them into one
+  continuous flow. Tag each step with its `use_case`; steps sharing a
+  `use_case` form one continuous flow, and a change of `use_case` is shown as a
+  divider for a separate use case. Lanes (actors) may be reused across the
+  whole area.
 - Detailed step lists can still go in `flows`; overview_flow is the summary.
 
 Output area-map JSON shape (for this area):
@@ -79,7 +86,7 @@ Output area-map JSON shape (for this area):
     "overview_flow": {
       "title": "<name of this area's overview flow>",
       "lanes": ["<actor_id>", "<actor_id>"],
-      "steps": [{"lane": "<actor_id>", "label": "<short action>"}]
+      "steps": [{"lane": "<actor_id>", "label": "<short action>", "use_case": "<use case name>"}]
     },
     "flows": [{"name": "", "steps": [""]}],
     "apis": [""], "screens": [""], "code_refs": ["path/to/file"],

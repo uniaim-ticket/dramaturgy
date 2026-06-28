@@ -145,8 +145,8 @@ The UI is a **map preview + a review queue**. The flow is:
      grasp the whole flow at a glance. When an area holds several unrelated use
      cases, they share the diagram but are separated by a divider (with the
      use-case name). Plus **CRUD**: one table of area×concept rows, sortable by
-     concept or area, filterable by a chosen area/concept, with subtle jump
-     links to each item's section.
+     concept or area, filterable via searchable multi-select comboboxes for
+     areas and concepts, with subtle jump links to each item's section.
    - **Components** — structural systems that are not business actors (load
      balancers, monitoring, cross-cutting middleware).
 3. **Add findings inline**: click the **+** on any actor, concept, or area (or

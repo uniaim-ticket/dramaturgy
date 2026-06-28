@@ -46,6 +46,8 @@
   "concepts.hint": "Concept data (physical tables grouped by business meaning) and the areas that use them.",
   "crud.sort_by": "Sort by:",
   "crud.all": "All",
+  "crud.search": "Search…",
+  "crud.n_selected": "{n} selected",
   "confidence.high": "high",
   "confidence.medium": "medium",
   "confidence.low": "low",

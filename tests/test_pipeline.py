@@ -287,6 +287,10 @@ class ConceptCrudTests(unittest.TestCase):
         self.assertIn('href="#area-sales"', crud)
         self.assertIn('href="#concept-order"', crud)
         self.assertIn('class="jump"', crud)
+        # Filters are searchable multi-select comboboxes (checkbox options).
+        self.assertEqual(crud.count('class="ms"'), 2)
+        self.assertIn('class="ms-search"', crud)
+        self.assertIn('class="ms-opt"', crud)
 
     def test_render_shows_boxes_concepts_and_dual_crud(self):
         from dramaturgy.commands.merge_maps import merge

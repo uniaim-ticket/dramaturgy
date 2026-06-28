@@ -141,8 +141,22 @@ code { background: #f0f3f6; padding: 1px 4px; border-radius: 3px; font-size: 12p
 
 /* CRUD table controls (sort + filters) */
 .crud-controls { display: flex; gap: 16px; flex-wrap: wrap; margin: 8px 0 12px;
-  font-size: 13px; color: #41506a; }
+  font-size: 13px; color: #41506a; align-items: flex-start; }
 .crud-controls select { font-size: 13px; }
+/* Searchable multi-select combobox */
+.ms { position: relative; }
+.ms-btn { font-size: 13px; padding: 4px 10px; border: 1px solid #c4ccd4;
+  border-radius: 6px; background: #fff; cursor: pointer; }
+.ms-panel { position: absolute; z-index: 20; top: 100%; left: 0; margin-top: 4px;
+  width: 260px; max-width: 80vw; background: #fff; border: 1px solid #c4ccd4;
+  border-radius: 8px; box-shadow: 0 6px 20px rgba(0,0,0,.15); padding: 8px; }
+.ms-search { width: 100%; font-size: 13px; padding: 5px 8px; margin-bottom: 6px;
+  border: 1px solid #c4ccd4; border-radius: 6px; }
+.ms-opts { max-height: 240px; overflow: auto; }
+.ms-opt { display: block; font-size: 13px; padding: 3px 4px; cursor: pointer;
+  white-space: normal; }
+.ms-opt:hover { background: #eef3f8; }
+.ms-opt input { margin-right: 6px; }
 /* Subtle jump link at the end of an area / concept cell. */
 a.jump { color: #b6bfca; text-decoration: none; margin-left: 4px; font-size: 11px; }
 a.jump:hover { color: #2563eb; }
@@ -511,12 +525,23 @@ def render_crud(cat: Catalog, areas: list, concepts: list) -> str:
     if not rows:
         return f'<p class="muted">{e(cat.t("empty.none"))}</p>'
 
-    # Filter option lists (sorted by appearance order).
-    def options(items, order):
-        opts = f'<option value="*">{e(cat.t("crud.all"))}</option>'
+    # Searchable multi-select combobox (checkbox list + search). Empty
+    # selection = all. Pure markup; behavior is in the inline script below.
+    def multiselect(box_id, label, items, order):
+        opts = ""
         for it in sorted(items, key=lambda x: order.get(x["id"], 9999)):
-            opts += f'<option value="{e(it["id"])}">{e(it.get("name") or it["id"])}</option>'
-        return opts
+            name = it.get("name") or it["id"]
+            opts += (
+                f'<label class="ms-opt" data-text="{e(name.lower())}">'
+                f'<input type="checkbox" value="{e(it["id"])}"> {e(name)}</label>')
+        return (
+            f'<div class="ms" id="{box_id}">'
+            f'<button type="button" class="ms-btn" data-all="{e(cat.t("crud.all"))}"'
+            f' data-selfmt="{e(cat.t("crud.n_selected"))}">'
+            f'{e(label)}: <span class="ms-summary">{e(cat.t("crud.all"))}</span> ▾</button>'
+            f'<div class="ms-panel" hidden>'
+            f'<input type="search" class="ms-search" placeholder="{e(cat.t("crud.search"))}">'
+            f'<div class="ms-opts">{opts}</div></div></div>')
 
     controls = (
         '<div class="crud-controls">'
@@ -525,10 +550,8 @@ def render_crud(cat: Catalog, areas: list, concepts: list) -> str:
         f'<option value="concept">{e(cat.t("label.concept_table"))}</option>'
         f'<option value="area">{e(cat.t("nav.areas"))}</option>'
         '</select></label>'
-        f'<label>{e(cat.t("nav.areas"))} '
-        f'<select id="crud-filter-area">{options(areas, area_order)}</select></label>'
-        f'<label>{e(cat.t("label.concept_table"))} '
-        f'<select id="crud-filter-concept">{options(concepts, concept_order)}</select></label>'
+        f'{multiselect("crud-filter-area", cat.t("nav.areas"), areas, area_order)}'
+        f'{multiselect("crud-filter-concept", cat.t("label.concept_table"), concepts, concept_order)}'
         '</div>')
 
     table = (
@@ -754,18 +777,53 @@ document.addEventListener('click', function (ev) {{
   }});
 }})();
 
-// CRUD table: sort by concept/area, filter by a chosen area and/or concept.
+// Searchable multi-select combobox: checkbox list + search; empty = all.
+function setupMultiSelect(box, onChange) {{
+  var btn = box.querySelector('.ms-btn');
+  var panel = box.querySelector('.ms-panel');
+  var search = box.querySelector('.ms-search');
+  var summary = box.querySelector('.ms-summary');
+  var allLabel = btn.dataset.all;
+  var selFmt = btn.dataset.selfmt;   // e.g. "{{n}} 件選択"
+
+  btn.addEventListener('click', function () {{
+    panel.hidden = !panel.hidden;
+    if (!panel.hidden) {{ search.value = ''; filter(''); search.focus(); }}
+  }});
+  document.addEventListener('click', function (ev) {{
+    if (!box.contains(ev.target)) panel.hidden = true;
+  }});
+  function filter(q) {{
+    q = q.toLowerCase();
+    box.querySelectorAll('.ms-opt').forEach(function (o) {{
+      o.style.display = o.dataset.text.indexOf(q) >= 0 ? '' : 'none';
+    }});
+  }}
+  search.addEventListener('input', function () {{ filter(search.value); }});
+  box.addEventListener('change', function () {{
+    var sel = box.selected();
+    summary.textContent = sel.length
+      ? selFmt.replace('{{n}}', sel.length) : allLabel;
+    onChange();
+  }});
+  box.selected = function () {{
+    return Array.prototype.slice
+      .call(box.querySelectorAll('input:checked')).map(function (i) {{ return i.value; }});
+  }};
+}}
+
+// CRUD table: sort by concept/area, filter by selected areas and/or concepts.
 (function () {{
   var tbody = document.getElementById('crud-tbody');
   if (!tbody) return;
   var sortSel = document.getElementById('crud-sort');
-  var areaSel = document.getElementById('crud-filter-area');
-  var conceptSel = document.getElementById('crud-filter-concept');
+  var areaBox = document.getElementById('crud-filter-area');
+  var conceptBox = document.getElementById('crud-filter-concept');
   var rows = Array.prototype.slice.call(tbody.querySelectorAll('.crud-row'));
 
   function apply() {{
     var by = sortSel.value;            // 'concept' | 'area'
-    var fa = areaSel.value, fc = conceptSel.value;
+    var fa = areaBox.selected(), fc = conceptBox.selected();
     var sorted = rows.slice().sort(function (a, b) {{
       var p = by === 'area'
         ? ['aorder', 'corder'] : ['corder', 'aorder'];
@@ -773,15 +831,15 @@ document.addEventListener('click', function (ev) {{
       return d !== 0 ? d : (+a.dataset[p[1]]) - (+b.dataset[p[1]]);
     }});
     sorted.forEach(function (row) {{
-      var ok = (fa === '*' || row.dataset.area === fa) &&
-               (fc === '*' || row.dataset.concept === fc);
+      var ok = (fa.length === 0 || fa.indexOf(row.dataset.area) >= 0) &&
+               (fc.length === 0 || fc.indexOf(row.dataset.concept) >= 0);
       row.style.display = ok ? '' : 'none';
       tbody.appendChild(row);   // reorder in place
     }});
   }}
-  [sortSel, areaSel, conceptSel].forEach(function (el) {{
-    el.addEventListener('change', apply);
-  }});
+  setupMultiSelect(areaBox, apply);
+  setupMultiSelect(conceptBox, apply);
+  sortSel.addEventListener('change', apply);
   apply();
 }})();
 </script>

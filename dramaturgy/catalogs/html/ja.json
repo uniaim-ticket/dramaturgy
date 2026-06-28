@@ -46,6 +46,8 @@
   "concepts.hint": "物理テーブルを業務上の意味でまとめた概念データと、それを使う領域の対応です。",
   "crud.sort_by": "並び替え:",
   "crud.all": "すべて",
+  "crud.search": "検索…",
+  "crud.n_selected": "{n} 件選択",
   "confidence.high": "高",
   "confidence.medium": "中",
   "confidence.low": "低",

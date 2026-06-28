@@ -6,7 +6,6 @@
   "nav.actors": "Actors",
   "nav.classifications": "Data value sets",
   "nav.components": "Components (systems)",
-  "nav.dev": "Developer reference",
   "nav.validation": "Validation",
   "actors.person": "Business actors (people)",
   "actors.system": "Systems treated as actors",

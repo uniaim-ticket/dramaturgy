@@ -11,7 +11,7 @@ Views:
 - Concept data: each concept with the physical tables it abstracts and the
   areas that use it.
 - CRUD: the same concept-centric data shown two ways — by area and by concept.
-- Developer reference and validation.
+- Validation.
 """
 
 from __future__ import annotations
@@ -645,18 +645,6 @@ def render_components(cat: Catalog, components: list) -> str:
         f"<th>{e(cat.t('label.code_refs'))}</th></tr>{rows}</table>")
 
 
-def render_dev(cat: Catalog, areas: list) -> str:
-    rows = ""
-    for area in areas:
-        refs = ", ".join(f"<code>{e(r)}</code>" for r in area.get("code_refs", []))
-        rows += (f"<tr><td>{e(area.get('name'))}</td>"
-                 f"<td>{tags(area.get('apis'))}</td>"
-                 f"<td>{refs or '—'}</td></tr>")
-    return (f"<table><tr><th>{e(cat.t('nav.areas'))}</th>"
-            f"<th>{e(cat.t('label.apis'))}</th>"
-            f"<th>{e(cat.t('label.code_refs'))}</th></tr>{rows}</table>")
-
-
 def render_validation(cat: Catalog, mm: dict) -> str:
     items = mm.get("validations", [])
     report = mm.get("merge_report", {})
@@ -684,7 +672,7 @@ def render_html(mm: dict, ui_lang: str, vocab: dict | None = None) -> str:
         ("actors", "nav.actors"), ("areas", "nav.areas"),
         ("concepts", "nav.concepts"), ("classifications", "nav.classifications"),
         ("crud", "nav.crud"), ("components", "nav.components"),
-        ("dev", "nav.dev"), ("validation", "nav.validation"),
+        ("validation", "nav.validation"),
     ]
     nav = "".join(f'<a href="#{anchor}">{e(cat.t(key))}</a>'
                   for anchor, key in nav_items)
@@ -708,8 +696,6 @@ def render_html(mm: dict, ui_lang: str, vocab: dict | None = None) -> str:
         f'{render_crud(cat, areas, concepts)}</section>',
         f'<section id="components"><h2>{e(cat.t("nav.components"))}</h2>'
         f'{render_components(cat, mm.get("components", []))}</section>',
-        f'<section id="dev"><h2>{e(cat.t("nav.dev"))}</h2>'
-        f'{render_dev(cat, areas)}</section>',
         f'<section id="validation"><h2>{e(cat.t("nav.validation"))}</h2>'
         f'{render_validation(cat, mm)}</section>',
     ]

@@ -57,7 +57,6 @@ details.box > summary { list-style: none; cursor: pointer; padding: 14px 16px;
 details.box > summary::-webkit-details-marker { display: none; }
 details.box > summary:hover { background: #eef3f8; }
 details.box .sum-name { font-size: 15px; }
-details.box .sum-id { color: #8b95a1; font-size: 12px; font-weight: 400; }
 details.box .body { padding: 0 16px 16px; border-top: 1px solid #eef1f4; }
 
 .kv { display: grid; grid-template-columns: 160px 1fr; gap: 4px 12px;
@@ -387,8 +386,7 @@ def render_area_box(cat: Catalog, area: dict, concepts: dict,
     return (
         f'<details class="box" id="area-{e(aid)}">'
         f'<summary><span class="sum-name">{e(aname)}'
-        f'{apin("", aname)}</span>'
-        f'<span class="sum-id">{e(aid)}</span></summary>'
+        f'{apin("", aname)}</span></summary>'
         f'<div class="body"><p>{e(area.get("one_liner"))}'
         f'{apin("one_liner", cat.t("label.one_liner"))}</p>'
         f'{overview_html}'

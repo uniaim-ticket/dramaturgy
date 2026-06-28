@@ -487,6 +487,26 @@ class OverviewFlowTests(unittest.TestCase):
         # The review pin still scopes to the actor id.
         self.assertIn('data-rv-field="actor:operator"', area)
 
+    def test_related_areas_show_name_not_id(self):
+        from dramaturgy.commands.render_html import render_html
+        mm = {
+            "content_lang": "ja", "system": {"name": "S"},
+            "areas": [
+                {"id": "sales", "name": "販売", "concepts": [],
+                 "concept_crud": [], "child_area_ids": [],
+                 "related_area_ids": ["payment-settlement"]},
+                {"id": "payment-settlement", "name": "決済・精算",
+                 "concepts": [], "concept_crud": [], "related_area_ids": [],
+                 "child_area_ids": []}],
+            "concepts": [], "classifications": [], "components": [],
+            "actors": [], "flows": []}
+        html = render_html(mm, "ja")
+        card = html.split('id="area-sales"')[1].split("</details>")[0]
+        # Related area shown by name, linked — not the raw id.
+        self.assertIn("決済・精算", card)
+        self.assertNotIn(">payment-settlement<", card)
+        self.assertIn('href="#area-payment-settlement"', card)
+
     def test_actor_action_shows_area_name_not_id(self):
         from dramaturgy.commands.render_html import render_html
         mm = {

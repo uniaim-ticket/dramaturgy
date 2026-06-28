@@ -71,6 +71,8 @@ details.box .body { padding: 0 16px 16px; border-top: 1px solid #eef1f4; }
 .brk { overflow-wrap: anywhere; word-break: break-word; }
 td { overflow-wrap: anywhere; }
 .tag.area { background: #e5eefc; }
+a.tag.area { color: #1f4f9c; text-decoration: none; }
+a.tag.area:hover { background: #d3e2fb; }
 .tag.tagchip { background: #efe7fb; color: #5b3aa6; }
 .tag.val { background: #eef3f7; }
 
@@ -311,12 +313,22 @@ def render_swimlane(cat: Catalog, flow: dict, actors: dict) -> str:
 
 
 def render_area_box(cat: Catalog, area: dict, concepts: dict,
-                    actors: dict | None = None) -> str:
+                    actors: dict | None = None,
+                    area_map: dict | None = None) -> str:
     aid, aname = area.get("id"), area.get("name")
     actors = actors or {}
+    area_map = area_map or {}
 
     def apin(field, label):
         return pin("area", aid, aname, field, label)
+
+    def area_tags(ids):
+        # Linked tags showing each related area's display name (not its id).
+        if not ids:
+            return '<span class="muted">—</span>'
+        return "".join(
+            f'<a class="tag area" href="#area-{e(i)}">{e(_area_name(area_map, i))}</a>'
+            for i in ids)
 
     # The concepts this area touches, with its CRUD ops (area-side view).
     # Each row is individually commentable.
@@ -353,9 +365,10 @@ def render_area_box(cat: Catalog, area: dict, concepts: dict,
     # (field key, label, rendered value) — every field gets its own pin.
     rows = [
         ("purpose", cat.t("label.purpose"), e(area.get("purpose")) or "—"),
-        ("parent", cat.t("label.parent"), e(area.get("parent_area_id")) or "—"),
-        ("children", cat.t("label.children"), tags(area.get("child_area_ids"), "area")),
-        ("related", cat.t("label.related"), tags(area.get("related_area_ids"), "area")),
+        ("parent", cat.t("label.parent"),
+         area_tags([area["parent_area_id"]]) if area.get("parent_area_id") else "—"),
+        ("children", cat.t("label.children"), area_tags(area.get("child_area_ids"))),
+        ("related", cat.t("label.related"), area_tags(area.get("related_area_ids"))),
         ("actors", cat.t("label.actors"), f"<ul>{actor_lines}</ul>" if actor_lines else "—"),
         ("crud", cat.t("label.crud"), crud_block),
         ("flows", cat.t("label.flows"), f"<ul>{flows}</ul>" if flows else "—"),
@@ -397,7 +410,9 @@ def render_areas(cat: Catalog, areas: list, concepts: dict,
                  actors: dict | None = None) -> str:
     if not areas:
         return f'<p class="muted">{e(cat.t("empty.none"))}</p>'
-    boxes = "".join(render_area_box(cat, a, concepts, actors) for a in areas)
+    area_map = {a["id"]: a for a in areas}
+    boxes = "".join(render_area_box(cat, a, concepts, actors, area_map)
+                    for a in areas)
     return (f'<p class="muted">{e(cat.t("areas.hint"))}</p>'
             f'<div class="box-grid">{boxes}</div>')
 

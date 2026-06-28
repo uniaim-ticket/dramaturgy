@@ -487,6 +487,25 @@ class OverviewFlowTests(unittest.TestCase):
         # The review pin still scopes to the actor id.
         self.assertIn('data-rv-field="actor:operator"', area)
 
+    def test_actor_action_shows_area_name_not_id(self):
+        from dramaturgy.commands.render_html import render_html
+        mm = {
+            "content_lang": "ja", "system": {"name": "S"},
+            "areas": [{"id": "admin-operation", "name": "運用管理",
+                       "concepts": [], "concept_crud": [],
+                       "related_area_ids": [], "child_area_ids": []}],
+            "concepts": [], "classifications": [], "components": [],
+            "actors": [{"id": "adm", "name": "管理者", "category": "person",
+                        "actions": [{"area_id": "admin-operation",
+                                     "action": "承認", "description": "d"}]}],
+            "flows": []}
+        html = render_html(mm, "ja")
+        card = html.split('id="actor-adm"')[1].split("</div>")[0]
+        # Area shown by its Japanese name, linked — not the raw id.
+        self.assertIn("(運用管理)", card)
+        self.assertNotIn("(admin-operation)", card)
+        self.assertIn('href="#area-admin-operation"', card)
+
 
 class SourceHintsRobustnessTests(unittest.TestCase):
     """source_hints may arrive as a dict (normal), a bare list/string, or be

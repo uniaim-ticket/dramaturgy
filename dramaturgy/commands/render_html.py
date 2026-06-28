@@ -171,6 +171,9 @@ code { background: #f0f3f6; padding: 1px 4px; border-radius: 3px; font-size: 12p
 /* Subtle jump link at the end of an area / concept cell. */
 a.jump { color: #b6bfca; text-decoration: none; margin-left: 4px; font-size: 11px; }
 a.jump:hover { color: #2563eb; }
+/* Area reference shown next to an actor's action (links to the area). */
+a.area-ref { color: #8b95a1; text-decoration: none; font-size: 12px; }
+a.area-ref:hover { color: #2563eb; }
 """
 
 
@@ -582,7 +585,7 @@ def render_crud(cat: Catalog, areas: list, concepts: list) -> str:
     return controls + table
 
 
-def _actor_card(cat: Catalog, a: dict) -> str:
+def _actor_card(cat: Catalog, a: dict, areas: dict) -> str:
     aid, aname = a.get("id"), a.get("name")
 
     def acpin(field, label):
@@ -591,9 +594,14 @@ def _actor_card(cat: Catalog, a: dict) -> str:
     actions = ""
     for i, act in enumerate(a.get("actions", [])):
         label = act.get("action") or f"action {i + 1}"
+        # Show the business area's display name (linked), not its raw id.
+        area_id = act.get("area_id")
+        area_html = ""
+        if area_id:
+            area_html = (f' <a class="muted area-ref" href="#area-{e(area_id)}">'
+                         f'({e(_area_name(areas, area_id))})</a>')
         actions += (
-            f"<li>{e(act.get('action'))} "
-            f"<span class='muted'>({e(act.get('area_id'))})</span> "
+            f"<li>{e(act.get('action'))}{area_html} "
             f"— {e(act.get('description'))}"
             f"{acpin('action:' + str(i), label)}</li>")
     return (
@@ -604,20 +612,21 @@ def _actor_card(cat: Catalog, a: dict) -> str:
         f'<ul>{actions}</ul></div>')
 
 
-def render_actors(cat: Catalog, actors: list) -> str:
+def render_actors(cat: Catalog, actors: list, areas: dict | None = None) -> str:
     """Actors grouped by category: business people first, then systems that
     are treated as actors. Pure infrastructure is NOT here (see components)."""
     if not actors:
         return f'<p class="muted">{e(cat.t("empty.none"))}</p>'
+    areas = areas or {}
     persons = [a for a in actors if a.get("category", "person") != "system"]
     systems = [a for a in actors if a.get("category") == "system"]
     out = ""
     if persons:
         out += f'<h3 class="grp">{e(cat.t("actors.person"))}</h3>'
-        out += "".join(_actor_card(cat, a) for a in persons)
+        out += "".join(_actor_card(cat, a, areas) for a in persons)
     if systems:
         out += f'<h3 class="grp">{e(cat.t("actors.system"))}</h3>'
-        out += "".join(_actor_card(cat, a) for a in systems)
+        out += "".join(_actor_card(cat, a, areas) for a in systems)
     return out
 
 
@@ -735,7 +744,7 @@ def render_html(mm: dict, ui_lang: str, vocab: dict | None = None) -> str:
 
     sections = [
         f'<section id="actors"><h2>{e(cat.t("nav.actors"))}</h2>'
-        f'{render_actors(cat, mm.get("actors", []))}</section>',
+        f'{render_actors(cat, mm.get("actors", []), area_map)}</section>',
         f'<section id="areas"><h2>{e(cat.t("nav.areas"))}</h2>'
         f'{render_areas(cat, areas, concept_map, actor_map)}</section>',
         f'<section id="concepts"><h2>{e(cat.t("nav.concepts"))}</h2>'

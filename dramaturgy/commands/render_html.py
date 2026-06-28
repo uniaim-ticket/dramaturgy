@@ -856,6 +856,57 @@ def render_html(mm: dict, ui_lang: str, vocab: dict | None = None) -> str:
 <nav>{nav}</nav>
 <main>{lang_note}{"".join(sections)}</main>
 <script>
+// Preserve UI state across reloads (the app shell reloads this iframe after a
+// finding runs). We remember which area boxes are expanded and the scroll
+// position in sessionStorage, keyed by path so it is stable across the
+// cache-busting query string, and restore them on load.
+(function () {{
+  var KEY = 'dramaturgy.viewstate:' + location.pathname;
+  function load() {{
+    try {{ return JSON.parse(sessionStorage.getItem(KEY)) || {{}}; }}
+    catch (e) {{ return {{}}; }}
+  }}
+  function save(s) {{
+    try {{ sessionStorage.setItem(KEY, JSON.stringify(s)); }} catch (e) {{}}
+  }}
+  var state = load();
+
+  // Restore expanded <details> (by id) before measuring/scrolling.
+  var open = state.open || [];
+  open.forEach(function (id) {{
+    var el = document.getElementById(id);
+    if (el && el.tagName === 'DETAILS') el.open = true;
+  }});
+  // Restore scroll after layout settles (reopened boxes change the height).
+  if (typeof state.scrollY === 'number') {{
+    var y = state.scrollY;
+    requestAnimationFrame(function () {{ window.scrollTo(0, y); }});
+    window.addEventListener('load', function () {{ window.scrollTo(0, y); }});
+  }}
+
+  // Track open/close of any details box.
+  document.addEventListener('toggle', function (ev) {{
+    var d = ev.target;
+    if (!d || d.tagName !== 'DETAILS' || !d.id) return;
+    state = load();
+    var set = new Set(state.open || []);
+    if (d.open) set.add(d.id); else set.delete(d.id);
+    state.open = Array.from(set);
+    save(state);
+  }}, true);
+
+  // Track scroll (throttled via rAF) so the latest position is persisted.
+  var ticking = false;
+  window.addEventListener('scroll', function () {{
+    if (ticking) return;
+    ticking = true;
+    requestAnimationFrame(function () {{
+      state = load(); state.scrollY = window.scrollY; save(state);
+      ticking = false;
+    }});
+  }}, {{ passive: true }});
+}})();
+
 // Developer mode: hides/shows developer-facing items (code refs, APIs,
 // screens, validation). Initial state comes from the ?dev=1 query (so it
 // survives iframe refreshes); the app shell also toggles it via postMessage.

@@ -639,6 +639,32 @@ class DeveloperModeTests(unittest.TestCase):
         self.assertIn("dev=1", html)
 
 
+class ViewStatePersistenceTests(unittest.TestCase):
+    """The app shell reloads the preview iframe after a finding runs. The
+    rendered page must remember expanded boxes + scroll position across that
+    reload (persisted in sessionStorage, restored on load)."""
+
+    def test_view_state_script_present(self):
+        from dramaturgy.commands.render_html import render_html
+        mm = {"content_lang": "ja", "system": {"name": "S"},
+              "areas": [{"id": "a1", "name": "領域1", "one_liner": "x",
+                         "concept_crud": [], "related_area_ids": [],
+                         "child_area_ids": []}],
+              "concepts": [], "classifications": [], "components": [],
+              "actors": [], "flows": []}
+        html = render_html(mm, "ja")
+        # Persists to sessionStorage, keyed by path (stable across the
+        # cache-busting query), tracking open boxes and scroll position.
+        self.assertIn("sessionStorage", html)
+        self.assertIn("dramaturgy.viewstate", html)
+        self.assertIn("location.pathname", html)
+        self.assertIn("state.open", html)
+        self.assertIn("scrollY", html)
+        # Restores by reopening <details> ids and scrolling back.
+        self.assertIn("addEventListener('toggle'", html)
+        self.assertIn("window.scrollTo", html)
+
+
 class SourceHintsRobustnessTests(unittest.TestCase):
     """source_hints may arrive as a dict (normal), a bare list/string, or be
     missing — Claude's output varies. match_files must tolerate all."""

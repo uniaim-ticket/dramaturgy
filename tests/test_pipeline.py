@@ -466,5 +466,33 @@ class OverviewFlowTests(unittest.TestCase):
         self.assertEqual(nums, ["1", "2", "1", "2"])
 
 
+class SourceHintsRobustnessTests(unittest.TestCase):
+    """source_hints may arrive as a dict (normal), a bare list/string, or be
+    missing — Claude's output varies. match_files must tolerate all."""
+
+    def test_match_files_tolerates_hint_shapes(self):
+        from dramaturgy.common.area_match import match_files
+        si = {"files": [{"path": "app/models/order.rb", "lines": 5},
+                        {"path": "lib/util.rb", "lines": 3}]}
+
+        def paths(area):
+            return [f["path"] for f in match_files(area, si)]
+
+        # dict (normal)
+        self.assertEqual(
+            paths({"source_hints": {"directories": ["models"]}}),
+            ["app/models/order.rb"])
+        # bare list -> treated as keywords (the reported crash)
+        self.assertEqual(sorted(paths({"source_hints": ["order", "util"]})),
+                         ["app/models/order.rb", "lib/util.rb"])
+        # bare string
+        self.assertEqual(paths({"source_hints": "order"}),
+                         ["app/models/order.rb"])
+        # missing / wrong-typed elements
+        self.assertEqual(paths({"id": "x"}), [])
+        self.assertEqual(paths({"source_hints": {"keywords": [123, "order", None]}}),
+                         ["app/models/order.rb"])
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

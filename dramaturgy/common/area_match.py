@@ -19,11 +19,29 @@ def find_area(area_tree: dict, area_id: str) -> dict | None:
     return None
 
 
+def _strs(value) -> list[str]:
+    """Coerce a hint value to a list of lowercase strings, tolerating a bare
+    string or non-string elements."""
+    if value is None:
+        return []
+    if isinstance(value, str):
+        value = [value]
+    if not isinstance(value, (list, tuple)):
+        return []
+    return [str(v).lower() for v in value if v]
+
+
 def _hints(area: dict) -> dict[str, list[str]]:
-    h = area.get("source_hints", {}) or {}
+    # source_hints is meant to be a dict, but Claude sometimes emits a bare
+    # list (treated as keywords) or omits it — tolerate all shapes.
+    h = area.get("source_hints") or {}
+    if isinstance(h, (list, tuple, str)):
+        return {"directories": [], "keywords": _strs(h)}
+    if not isinstance(h, dict):
+        return {"directories": [], "keywords": []}
     return {
-        "directories": [d.lower() for d in h.get("directories", [])],
-        "keywords": [k.lower() for k in h.get("keywords", [])],
+        "directories": _strs(h.get("directories")),
+        "keywords": _strs(h.get("keywords")),
     }
 
 

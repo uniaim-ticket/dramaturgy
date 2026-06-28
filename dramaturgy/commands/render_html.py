@@ -329,14 +329,20 @@ def render_area_box(cat: Catalog, area: dict, concepts: dict,
                   f'<th>CRUD</th></tr>{crud_rows}</table>'
                   if crud_rows else f'<span class="muted">{e(cat.t("empty.none"))}</span>')
 
-    # Each actor's involvement is individually commentable.
+    # Each actor's involvement is individually commentable. Show the actor's
+    # display name (from the top-level actors), not its id.
+    def actor_label(actor_id):
+        ac = actors.get(actor_id)
+        return ac.get("name") if ac and ac.get("name") else actor_id
+
     actor_lines = ""
     for a in area.get("actors", []) or []:
         actor_id = a.get("actor_id")
+        name = actor_label(actor_id)
         acts = a.get("actions", [])
         acts = ", ".join(acts) if isinstance(acts, list) else str(acts)
-        actor_lines += (f"<li><b>{e(actor_id)}</b>: {e(acts)}"
-                        f"{apin('actor:' + str(actor_id), str(actor_id))}</li>")
+        actor_lines += (f"<li><b>{e(name)}</b>: {e(acts)}"
+                        f"{apin('actor:' + str(actor_id), str(name))}</li>")
     flows = ""
     for f in area.get("flows", []) or []:
         name = f.get("name") if isinstance(f, dict) else f

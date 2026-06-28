@@ -468,6 +468,25 @@ class OverviewFlowTests(unittest.TestCase):
         nums = [s.split("<")[0] for s in area.split('class="sl-n">')[1:]]
         self.assertEqual(nums, ["1", "2", "1", "2"])
 
+    def test_area_actors_show_display_name_not_id(self):
+        from dramaturgy.commands.render_html import render_html
+        mm = {
+            "content_lang": "ja", "system": {"name": "S"},
+            "areas": [{"id": "ops", "name": "運用", "concepts": [],
+                       "concept_crud": [], "related_area_ids": [],
+                       "child_area_ids": [],
+                       "actors": [{"actor_id": "operator", "actions": ["設定"]}]}],
+            "concepts": [], "classifications": [], "components": [],
+            "actors": [{"id": "operator", "name": "営業/運用担当",
+                        "category": "person"}],
+            "flows": []}
+        html = render_html(mm, "ja")
+        area = html.split('id="area-ops"')[1].split("</details>")[0]
+        self.assertIn("<b>営業/運用担当</b>", area)   # display name
+        self.assertNotIn("<b>operator</b>", area)     # not the bare id
+        # The review pin still scopes to the actor id.
+        self.assertIn('data-rv-field="actor:operator"', area)
+
 
 class SourceHintsRobustnessTests(unittest.TestCase):
     """source_hints may arrive as a dict (normal), a bare list/string, or be

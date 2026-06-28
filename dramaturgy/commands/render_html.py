@@ -59,6 +59,20 @@ details.box > summary:hover { background: #eef3f8; }
 details.box .sum-name { font-size: 15px; }
 details.box .body { padding: 0 16px 16px; border-top: 1px solid #eef1f4; }
 
+/* Sub-areas: a parent's detailing. Nested boxes sit in an indented, tinted
+   well inside the parent so a child reads as "part of this area, in detail". */
+.sub-areas { margin-top: 16px; border-top: 1px dashed #c4d0dc; padding-top: 10px; }
+.sub-areas > h4 { margin: 0 0 8px; font-size: 13px; color: #3d6a99; }
+.sub-areas > h4 .tiny { font-weight: 400; }
+.sub-grid { border-left: 3px solid #9db4cc; padding-left: 12px;
+  margin-left: 2px; background: #f5f8fb; border-radius: 0 6px 6px 0; }
+details.box.child { border-color: #c4d0dc; background: #fff; }
+details.box.child[open] { border-color: #9db4cc; }
+/* Banner at the top of a sub-area's detail: names the parent it details. */
+.parent-of { font-size: 12px; color: #5a6573; margin: 10px 0 4px;
+  padding: 4px 8px; background: #eef3f8; border-radius: 4px; display: inline-block; }
+.parent-of a { margin-left: 2px; }
+
 .kv { display: grid; grid-template-columns: 160px 1fr; gap: 4px 12px;
   font-size: 14px; margin-top: 10px; }
 .kv dt { color: #5a6573; font-weight: 600; }
@@ -315,7 +329,8 @@ def render_swimlane(cat: Catalog, flow: dict, actors: dict) -> str:
 
 def render_area_box(cat: Catalog, area: dict, concepts: dict,
                     actors: dict | None = None,
-                    area_map: dict | None = None) -> str:
+                    area_map: dict | None = None,
+                    children_html: str = "", banner: str = "") -> str:
     aid, aname = area.get("id"), area.get("name")
     actors = actors or {}
     area_map = area_map or {}
@@ -373,11 +388,11 @@ def render_area_box(cat: Catalog, area: dict, concepts: dict,
         flows += f"<li>{e(name)}{apin('flow:' + str(name), str(name))}</li>"
 
     # (field key, label, rendered value) — every field gets its own pin.
+    # Parent/children are conveyed structurally (banner + nested boxes), so
+    # they are not repeated as key-value rows here. Related areas stay, since
+    # they are not a hierarchy relationship.
     rows = [
         ("purpose", cat.t("label.purpose"), e(area.get("purpose")) or "—"),
-        ("parent", cat.t("label.parent"),
-         area_tags([area["parent_area_id"]]) if area.get("parent_area_id") else "—"),
-        ("children", cat.t("label.children"), area_tags(area.get("child_area_ids"))),
         ("related", cat.t("label.related"), area_tags(area.get("related_area_ids"))),
         ("actors", cat.t("label.actors"), f"<ul>{actor_lines}</ul>" if actor_lines else "—"),
         ("crud", cat.t("label.crud"), crud_block),
@@ -406,14 +421,23 @@ def render_area_box(cat: Catalog, area: dict, concepts: dict,
             f'{apin("overview_flow", cat.t("label.overview_flow"))}</h4>'
             f'{swim}</div>')
 
+    children_block = ""
+    if children_html:
+        n = len(area.get("child_area_ids") or [])
+        children_block = (
+            f'<div class="sub-areas"><h4>{e(cat.t("label.subareas_of"))}'
+            f' <span class="muted tiny">{e(cat.t("subareas.hint"))}</span></h4>'
+            f'<div class="box-grid sub-grid">{children_html}</div></div>')
+
     return (
-        f'<details class="box" id="area-{e(aid)}">'
+        f'<details class="box{" child" if banner else ""}" id="area-{e(aid)}">'
         f'<summary><span class="sum-name">{e(aname)}'
         f'{apin("", aname)}</span></summary>'
-        f'<div class="body"><p>{e(area.get("one_liner"))}'
+        f'<div class="body">{banner}<p>{e(area.get("one_liner"))}'
         f'{apin("one_liner", cat.t("label.one_liner"))}</p>'
         f'{overview_html}'
-        f'<dl class="kv">{kv}</dl>{low}</div></details>')
+        f'<dl class="kv">{kv}</dl>{low}'
+        f'{children_block}</div></details>')
 
 
 def render_areas(cat: Catalog, areas: list, concepts: dict,
@@ -421,8 +445,35 @@ def render_areas(cat: Catalog, areas: list, concepts: dict,
     if not areas:
         return f'<p class="muted">{e(cat.t("empty.none"))}</p>'
     area_map = {a["id"]: a for a in areas}
-    boxes = "".join(render_area_box(cat, a, concepts, actors, area_map)
-                    for a in areas)
+
+    # Build the parent→children index from the authoritative hierarchy. An
+    # area is a child when it has a parent_area_id that resolves to a real
+    # area; everything else (top-level areas, and orphans whose parent id is
+    # dangling) renders at the top grid so nothing is ever hidden.
+    children_of: dict = {}
+    for a in areas:
+        pid = a.get("parent_area_id")
+        if pid and pid in area_map and pid != a.get("id"):
+            children_of.setdefault(pid, []).append(a)
+
+    def render_one(area: dict, depth: int = 0) -> str:
+        # Recurse so a sub-area can itself have sub-areas (~1–2 levels).
+        kids = children_of.get(area.get("id"), [])
+        children_html = "".join(render_one(k, depth + 1) for k in kids)
+        banner = ""
+        pid = area.get("parent_area_id")
+        if depth > 0 and pid in area_map:
+            banner = (
+                f'<div class="parent-of">{e(cat.t("area.detail_of"))} '
+                f'<a class="tag area" href="#area-{e(pid)}">'
+                f'{e(_area_name(area_map, pid))}</a></div>')
+        return render_area_box(cat, area, concepts, actors, area_map,
+                               children_html=children_html, banner=banner)
+
+    roots = [a for a in areas
+             if not (a.get("parent_area_id") in area_map
+                     and a.get("parent_area_id") != a.get("id"))]
+    boxes = "".join(render_one(a) for a in roots)
     return (f'<p class="muted">{e(cat.t("areas.hint"))}</p>'
             f'<div class="box-grid">{boxes}</div>')
 

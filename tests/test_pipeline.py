@@ -533,27 +533,51 @@ class OverviewFlowTests(unittest.TestCase):
         self.assertNotIn(">payment-settlement<", card)
         self.assertIn('href="#area-payment-settlement"', card)
 
-    def test_children_show_names_and_dangling_marked_undefined(self):
+    def test_child_area_nested_inside_parent_with_banner(self):
+        # A child area (parent_area_id resolves to a real area) renders nested
+        # inside the parent's box, under the "sub-areas" section, and carries a
+        # banner naming the parent it details — making the parent→child
+        # "detailing" relationship structurally obvious.
         from dramaturgy.commands.render_html import render_html
         mm = {
             "content_lang": "ja", "system": {"name": "S"},
             "areas": [
                 {"id": "sales", "name": "販売", "concepts": [],
                  "concept_crud": [], "related_area_ids": [],
-                 "child_area_ids": ["purchase", "ghost-child"]},
-                {"id": "purchase", "name": "購入", "concepts": [],
+                 "child_area_ids": ["sales.payment"]},
+                {"id": "sales.payment", "name": "決済", "concepts": [],
                  "concept_crud": [], "related_area_ids": [],
-                 "child_area_ids": []}],
+                 "parent_area_id": "sales", "child_area_ids": []}],
             "concepts": [], "classifications": [], "components": [],
             "actors": [], "flows": []}
         html = render_html(mm, "ja")
-        card = html.split('id="area-sales"')[1].split("</details>")[0]
-        # Existing child -> name + link.
-        self.assertIn('href="#area-purchase"', card)
-        self.assertIn("購入", card)
-        # Dangling child -> marked undefined, no broken link.
-        self.assertIn("undef", card)
-        self.assertNotIn('href="#area-ghost-child"', card)
+        # The child box is nested inside the parent box (appears before the
+        # parent's closing </details>, inside the sub-areas well).
+        parent = html.split('id="area-sales"')[1]
+        sub = parent.split('class="sub-areas"')[1]
+        self.assertIn('id="area-sales.payment"', sub)
+        # The child carries a banner that links up to the parent.
+        child = html.split('id="area-sales.payment"')[1].split("</details>")[0]
+        self.assertIn("parent-of", child)
+        self.assertIn('href="#area-sales"', child)
+        self.assertIn("販売", child)
+
+    def test_orphan_area_with_dangling_parent_still_rendered(self):
+        # An area whose parent_area_id points to a non-existent area must not
+        # be hidden — it falls back to the top-level grid.
+        from dramaturgy.commands.render_html import render_html
+        mm = {
+            "content_lang": "ja", "system": {"name": "S"},
+            "areas": [
+                {"id": "lonely", "name": "孤児", "concepts": [],
+                 "concept_crud": [], "related_area_ids": [],
+                 "parent_area_id": "ghost", "child_area_ids": []}],
+            "concepts": [], "classifications": [], "components": [],
+            "actors": [], "flows": []}
+        html = render_html(mm, "ja")
+        self.assertIn('id="area-lonely"', html)
+        # No broken banner link to the missing parent.
+        self.assertNotIn('href="#area-ghost"', html)
 
     def test_actor_action_shows_area_name_not_id(self):
         from dramaturgy.commands.render_html import render_html

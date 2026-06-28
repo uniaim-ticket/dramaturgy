@@ -27,7 +27,8 @@ from typing import Any
 
 from ..common.paths import read_json, workspace_dir, write_json
 
-TARGET_TYPES = ("actor", "concept", "area", "classification", "component")
+TARGET_TYPES = ("actor", "concept", "area", "classification", "component",
+                "system")
 KINDS = ("reframe", "audit", "proposal")
 STATUSES = ("open", "running", "done", "error", "dismissed")
 

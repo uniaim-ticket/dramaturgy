@@ -670,6 +670,45 @@ class ViewStatePersistenceTests(unittest.TestCase):
         self.assertIn("window.scrollTo", html)
 
 
+class SystemPurposeTests(unittest.TestCase):
+    """The system's overall purpose leads the document (before actors) when
+    present, and the whole section is omitted when absent."""
+
+    def _mm(self, purpose=None):
+        system = {"name": "My System"}
+        if purpose is not None:
+            system["purpose"] = purpose
+        return {"content_lang": "ja", "system": system,
+                "areas": [{"id": "a", "name": "A", "concept_crud": [],
+                           "related_area_ids": [], "child_area_ids": []}],
+                "concepts": [], "classifications": [], "components": [],
+                "actors": [], "flows": []}
+
+    def test_purpose_section_before_actors(self):
+        from dramaturgy.commands.render_html import render_html
+        html = render_html(
+            self._mm("利用者がチケットを買うためのシステム。\n会計が中核。"), "ja")
+        self.assertIn('id="purpose"', html)
+        self.assertIn('href="#purpose"', html)         # nav link
+        self.assertLess(html.index('id="purpose"'), html.index('id="actors"'))
+        # Line breaks become separate paragraphs; the system name is shown.
+        self.assertIn("会計が中核", html)
+        self.assertIn("My System", html)
+
+    def test_no_purpose_no_section(self):
+        from dramaturgy.commands.render_html import render_html
+        html = render_html(self._mm(), "ja")
+        self.assertNotIn('id="purpose"', html)
+        self.assertNotIn('href="#purpose"', html)
+
+    def test_purpose_commentable_in_app_not_export(self):
+        from dramaturgy.commands.render_html import render_html
+        mm = self._mm("目的の文章。")
+        self.assertIn('data-rv-type="system"', render_html(mm, "ja"))
+        self.assertNotIn('data-rv-type="system"',
+                         render_html(mm, "ja", export=True))
+
+
 class ExportDocumentTests(unittest.TestCase):
     """The export build is a standalone shareable document: same layout/data,
     but no review pins or app coupling, and a single self-contained file."""

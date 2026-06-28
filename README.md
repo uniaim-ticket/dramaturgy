@@ -125,21 +125,26 @@ developer mode is on:
 
 1. **Initialize all with Claude** (button in the header) — runs the whole
    pipeline as one job (analyze → area tree → subdivide review → area cards →
-   merge → validate → render) and reports progress live (elapsed time, the
-   Claude process id, and its CPU/memory, so you can see the session is alive).
-   Transient Claude API errors are retried; an area that still fails is skipped
-   and reported so the run finishes with a partial map you can complete later.
+   merge → validate → system purpose → render) and reports progress live
+   (elapsed time, the Claude process id, and its CPU/memory, so you can see the
+   session is alive). Transient Claude API errors are retried; an area that
+   still fails is skipped and reported so the run finishes with a partial map
+   you can complete later.
    In the **subdivide review** step, if the initial tree has an area that is
    too large or mixes unrelated responsibilities, Claude splits just that area
    into natural child areas (the parent area stays, gaining `child_area_ids`);
    areas that don't need it are left alone. Cards are then generated against the
    subdivided tree, so the new child areas get cards too.
+   As the final **system purpose** step, Claude writes a concise overall
+   purpose for the whole system (≤1000 chars) once the full map is in place.
 
    The **Instructions** button opens a box for extra guidance to Claude during
    generation (e.g. "tag concepts as master vs. transaction"). It is saved per
    repository (`.dramaturgy/init-instructions.txt`, separate from the result)
    and reused on every initialization — you don't retype it each run.
 2. **Read the preview** on the left. It shows, in order:
+   - **System purpose**: a concise overall purpose / overview of the system
+     (≤1000 chars) at the very top (omitted until generated).
    - **Actors**, grouped into *business actors (people)* and *systems treated
      as actors* (payment providers, external systems, terminals).
    - **Concept data** (physical tables grouped by business meaning) with the

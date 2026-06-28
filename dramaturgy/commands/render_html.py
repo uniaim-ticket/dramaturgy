@@ -51,6 +51,11 @@ main { max-width: 1100px; margin: 0 auto; padding: 24px; }
 section { background: #fff; border: 1px solid #e2e6ea; border-radius: 8px;
   padding: 20px; margin-bottom: 24px; }
 section > h2 { margin-top: 0; border-bottom: 2px solid #eef1f4; padding-bottom: 8px; }
+/* System purpose: a short orienting paragraph leading the document. */
+.sys-purpose { position: relative; font-size: 15px; line-height: 1.8; }
+.sys-purpose .sp-name { font-weight: 600; font-size: 16px; margin: 0 0 8px; }
+.sys-purpose p { margin: 0 0 8px; }
+#purpose { background: #f7faff; border-color: #cdddf0; }
 /* Anchored items must clear the sticky nav when scrolled to. */
 section, details.box, .box[id], [id^="actor-"],
 [id^="concept-"], [id^="classification-"], [id^="component-"] {
@@ -839,6 +844,22 @@ def render_components(cat: Catalog, components: list) -> str:
         f"<th>{e(cat.t('label.code_refs'))}</th></tr>{rows}</table>")
 
 
+def render_system_purpose(cat: Catalog, system: dict) -> str:
+    """The system's overall purpose — a short orienting paragraph shown at the
+    very top, before the actors. Preserves author line breaks as paragraphs.
+    Returns empty when no purpose has been written yet (section is omitted)."""
+    text = (system.get("purpose") or "").strip()
+    if not text:
+        return ""
+    paras = "".join(
+        f"<p>{e(p.strip())}</p>" for p in text.split("\n") if p.strip())
+    name = system.get("name")
+    name_html = f'<p class="sp-name">{e(name)}</p>' if name else ""
+    pin_html = pin("system", "system", name or "", "purpose",
+                   cat.t("nav.purpose"))
+    return f'<div class="sys-purpose">{name_html}{paras}{pin_html}</div>'
+
+
 def render_validation(cat: Catalog, mm: dict) -> str:
     items = mm.get("validations", [])
     report = mm.get("merge_report", {})
@@ -1076,8 +1097,14 @@ def _render_html_body(mm, ui_lang, vocab, cat, content_lang, system,
         lang_note = (f'<p class="muted tiny">'
                      f'{e(cat.t("note.content_lang", content_lang=content_lang))}</p>')
 
+    # The system's overall purpose leads the document when present.
+    purpose_html = render_system_purpose(cat, system)
+
     # (anchor, label key, dev_only). The validation view is developer-facing.
-    nav_items = [
+    nav_items = []
+    if purpose_html:
+        nav_items.append(("purpose", "nav.purpose", False))
+    nav_items += [
         ("actors", "nav.actors", False), ("areas", "nav.areas", False),
         ("concepts", "nav.concepts", False),
         ("classifications", "nav.classifications", False),
@@ -1099,7 +1126,12 @@ def _render_html_body(mm, ui_lang, vocab, cat, content_lang, system,
     area_map = {a["id"]: a for a in areas}
     actor_map = {a["id"]: a for a in mm.get("actors", [])}
 
-    sections = [
+    sections = []
+    if purpose_html:
+        sections.append(
+            f'<section id="purpose"><h2>{e(cat.t("nav.purpose"))}</h2>'
+            f'{purpose_html}</section>')
+    sections += [
         f'<section id="actors"><h2>{e(cat.t("nav.actors"))}</h2>'
         f'{render_actors(cat, mm.get("actors", []), area_map)}</section>',
         f'<section id="areas"><h2>{e(cat.t("nav.areas"))}</h2>'

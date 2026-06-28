@@ -212,15 +212,9 @@ class ClaudeJobTests(unittest.TestCase):
 
             def pipeline_spawn(argv):
                 prompt = argv[argv.index("-p") + 1]
-                if "area-tree.json" in prompt:
-                    tree = {"content_lang": "ja", "system": {"name": "S"},
-                            "areas": [{"id": "sales", "name": "販売",
-                                       "source_hints": {"keywords": ["ticket"]},
-                                       "confidence": "high"}]}
-                    writes = [(ws / "area-tree.json",
-                               json.dumps(tree, ensure_ascii=False))]
-                else:
-                    path = re.search(r'([^\s`]+area-maps[^\s`]*\.json)', prompt).group(1)
+                m = re.search(r'([^\s`]+area-maps[^\s`]*\.json)', prompt)
+                if m:
+                    path = m.group(1)
                     aid = Path(path).stem
                     card = {"content_lang": "ja",
                             "system": {"name": "S", "source_summary": {}},
@@ -230,6 +224,18 @@ class ClaudeJobTests(unittest.TestCase):
                                        "related_area_ids": [], "child_area_ids": [],
                                        "confidence": "high", "crud_summary": {}}]}
                     writes = [(Path(path), json.dumps(card, ensure_ascii=False))]
+                elif "意味地図のサマリ" in prompt:   # system purpose step
+                    mm = json.loads((ws / "meaning-map.json").read_text("utf-8"))
+                    mm.setdefault("system", {})["purpose"] = "テスト目的。"
+                    writes = [(ws / "meaning-map.json",
+                               json.dumps(mm, ensure_ascii=False))]
+                else:
+                    tree = {"content_lang": "ja", "system": {"name": "S"},
+                            "areas": [{"id": "sales", "name": "販売",
+                                       "source_hints": {"keywords": ["ticket"]},
+                                       "confidence": "high"}]}
+                    writes = [(ws / "area-tree.json",
+                               json.dumps(tree, ensure_ascii=False))]
                 lines = [
                     json.dumps({"type": "system", "subtype": "init",
                                 "session_id": "s1"}),
@@ -254,6 +260,9 @@ class ClaudeJobTests(unittest.TestCase):
             self.assertTrue((ws / "meaning-map.json").exists())
             self.assertTrue((ws / "meaning-map.html").exists())
             self.assertTrue(api.validate()[1]["ok"])
+            # The final step writes an overall system purpose into the map.
+            mm = json.loads((ws / "meaning-map.json").read_text("utf-8"))
+            self.assertTrue(mm["system"].get("purpose"))
 
     def test_init_pipeline_subdivides_oversized_area(self):
         # The init pipeline has a subdivide review step: when an area warrants
@@ -296,6 +305,11 @@ class ClaudeJobTests(unittest.TestCase):
                              "source_hints": {"keywords": ["ticket"]}}]
                     writes = [(ws / "area-tree.json",
                                json.dumps(tree, ensure_ascii=False))]
+                elif "意味地図のサマリ" in prompt:   # system purpose step
+                    mm = json.loads((ws / "meaning-map.json").read_text("utf-8"))
+                    mm.setdefault("system", {})["purpose"] = "テスト目的。"
+                    writes = [(ws / "meaning-map.json",
+                               json.dumps(mm, ensure_ascii=False))]
                 else:
                     # Initial area-tree generation: one flat area.
                     tree = {"content_lang": "ja", "system": {"name": "S"},
@@ -438,6 +452,14 @@ class ClaudeJobTests(unittest.TestCase):
                                      "session_id": "s1"})],
                         [(ws / "area-tree.json",
                           json.dumps(tree, ensure_ascii=False))])
+                if "意味地図のサマリ" in prompt:   # system purpose step
+                    mm = json.loads((ws / "meaning-map.json").read_text("utf-8"))
+                    mm.setdefault("system", {})["purpose"] = "テスト目的。"
+                    return _FakeProc(
+                        [json.dumps({"type": "result", "is_error": False,
+                                     "subtype": "success", "result": "ok"})],
+                        [(ws / "meaning-map.json",
+                          json.dumps(mm, ensure_ascii=False))])
                 path = re.search(r'([^\s`]+area-maps[^\s`]*\.json)', prompt).group(1)
                 aid = Path(path).stem
                 if aid == "bad":

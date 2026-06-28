@@ -27,6 +27,7 @@ from . import tags
 from .jobs import JobRegistry
 from .prompt_jobs import (
     area_card_prompt, area_tree_prompt, review_prompt, subdivide_review_prompt,
+    system_purpose_prompt,
 )
 
 
@@ -330,7 +331,7 @@ class Api:
         job.set_status("running")
         try:
             # 1. analyze (mechanical)
-            job.append_progress("[1/7] analyze repository")
+            job.append_progress("[1/8] analyze repository")
             res = self.analyze({})[1]
             job.append_progress(
                 f"      files={res['files']} lines={res['lines']}")
@@ -338,7 +339,7 @@ class Api:
                 job.append_progress("      (applying saved init instructions)")
 
             # 2. area tree (Claude, with retry on transient errors)
-            job.append_progress("[2/7] generate area tree with Claude")
+            job.append_progress("[2/8] generate area tree with Claude")
             prompt = area_tree_prompt(
                 self.repo_root, cfg.content_lang, cfg.project_name,
                 extra_instructions=extra)
@@ -357,7 +358,7 @@ class Api:
             # child areas, expanding area-tree.json. Best-effort: a failure
             # here just leaves the flat tree (cards still run).
             n_before = len(tree.get("areas", []))
-            job.append_progress("[3/7] review for sub-areas")
+            job.append_progress("[3/8] review for sub-areas")
             sub_prompt = subdivide_review_prompt(
                 self.repo_root, cfg.content_lang, extra_instructions=extra)
             ok, err = claude_runner.stream_claude_with_retry(
@@ -380,7 +381,7 @@ class Api:
             # survives retries) is recorded and SKIPPED — the run continues so
             # the user still gets a partial map and can regenerate later.
             areas = tree.get("areas", [])
-            job.append_progress(f"[4/7] generate {len(areas)} area cards")
+            job.append_progress(f"[4/8] generate {len(areas)} area cards")
             failed: list[str] = []
             for i, area in enumerate(areas, 1):
                 area_id = area.get("id")
@@ -410,7 +411,7 @@ class Api:
                     job, "no area cards were produced; "
                          f"all {len(areas)} areas failed: {failed}")
 
-            job.append_progress("[5/7] merge area cards")
+            job.append_progress("[5/8] merge area cards")
             code, merged = self.merge({})
             if code != 200:
                 return self._fail(job, f"merge: {merged.get('error')}")
@@ -419,14 +420,31 @@ class Api:
             # even if a card omitted them.
             self._apply_tree_hierarchy(tree)
             job.append_progress(f"      merged areas={merged.get('areas')}")
-            job.append_progress("[6/7] validate")
+            job.append_progress("[6/8] validate")
             code, v = self.validate()
             if code != 200:
                 return self._fail(job, f"validate: {v.get('error')}")
             job.append_progress(
                 f"      ok={v['ok']} errors={len(v['errors'])} "
                 f"warnings={len(v['warnings'])}")
-            job.append_progress("[7/7] render HTML")
+
+            # 7. system purpose (Claude) — the finishing touch: a concise
+            # overall purpose for the whole system, written last so it can
+            # draw on the complete map. Best-effort: a failure just leaves the
+            # map without a purpose (the section is then omitted).
+            job.append_progress("[7/8] write system purpose")
+            purpose_prompt = system_purpose_prompt(
+                self.repo_root, cfg.content_lang, extra_instructions=extra)
+            ok, err = claude_runner.stream_claude_with_retry(
+                job, purpose_prompt, self.repo_root,
+                claude_bin=self.claude_bin, spawn=self.spawn,
+                resume_session=job.session_id)
+            if ok:
+                job.append_progress("      purpose written")
+            else:
+                job.append_progress(f"      ! purpose skipped: {err}")
+
+            job.append_progress("[8/8] render HTML")
             self.render()
 
             if failed:

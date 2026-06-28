@@ -80,6 +80,45 @@ def subdivide_review_prompt(repo_root: str, content_lang: str,
     return body + _instructions_block(extra_instructions) + footer
 
 
+def system_purpose_prompt(repo_root: str, content_lang: str,
+                          extra_instructions: str | None = None) -> str:
+    """Final-touch prompt: ask Claude to write a concise (<=1000 char) overall
+    purpose for the system into meaning-map.json's system.purpose. Feeds a
+    compact summary of the merged map (areas / actors / core concepts)."""
+    ws = workspace_dir(repo_root)
+    mm = read_json(ws / "meaning-map.json")
+
+    system = mm.get("system", {})
+    lines = []
+    name = system.get("name")
+    if name:
+        lines.append(f"System name: {name}")
+    areas = mm.get("areas", [])
+    if areas:
+        lines.append("\nAreas:")
+        for a in areas:
+            one = a.get("one_liner") or a.get("purpose") or ""
+            lines.append(f"- {a.get('name')} ({a.get('id')}): {one}")
+    actors = mm.get("actors", [])
+    if actors:
+        lines.append("\nActors:")
+        for a in actors:
+            cat = a.get("category", "person")
+            lines.append(f"- {a.get('name')} [{cat}]: {a.get('description', '')}")
+    concepts = mm.get("concepts", [])
+    if concepts:
+        names = ", ".join(c.get("name", "") for c in concepts)
+        lines.append(f"\nCore concepts: {names}")
+    map_summary = "\n".join(lines) or "(empty map)"
+
+    body = render_prompt(
+        "system_purpose", content_lang,
+        map_path=str(ws / "meaning-map.json"),
+        map_summary=map_summary,
+    )
+    return body + _instructions_block(extra_instructions)
+
+
 def area_card_prompt(repo_root: str, content_lang: str, area_id: str,
                      extra_instructions: str | None = None) -> str:
     ws = workspace_dir(repo_root)

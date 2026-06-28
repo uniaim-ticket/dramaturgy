@@ -507,6 +507,28 @@ class OverviewFlowTests(unittest.TestCase):
         self.assertNotIn(">payment-settlement<", card)
         self.assertIn('href="#area-payment-settlement"', card)
 
+    def test_children_show_names_and_dangling_marked_undefined(self):
+        from dramaturgy.commands.render_html import render_html
+        mm = {
+            "content_lang": "ja", "system": {"name": "S"},
+            "areas": [
+                {"id": "sales", "name": "販売", "concepts": [],
+                 "concept_crud": [], "related_area_ids": [],
+                 "child_area_ids": ["purchase", "ghost-child"]},
+                {"id": "purchase", "name": "購入", "concepts": [],
+                 "concept_crud": [], "related_area_ids": [],
+                 "child_area_ids": []}],
+            "concepts": [], "classifications": [], "components": [],
+            "actors": [], "flows": []}
+        html = render_html(mm, "ja")
+        card = html.split('id="area-sales"')[1].split("</details>")[0]
+        # Existing child -> name + link.
+        self.assertIn('href="#area-purchase"', card)
+        self.assertIn("購入", card)
+        # Dangling child -> marked undefined, no broken link.
+        self.assertIn("undef", card)
+        self.assertNotIn('href="#area-ghost-child"', card)
+
     def test_actor_action_shows_area_name_not_id(self):
         from dramaturgy.commands.render_html import render_html
         mm = {

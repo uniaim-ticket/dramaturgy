@@ -73,6 +73,7 @@ td { overflow-wrap: anywhere; }
 .tag.area { background: #e5eefc; }
 a.tag.area { color: #1f4f9c; text-decoration: none; }
 a.tag.area:hover { background: #d3e2fb; }
+.tag.area.undef { background: #fbeaea; color: #9a3b3b; }
 .tag.tagchip { background: #efe7fb; color: #5b3aa6; }
 .tag.val { background: #eef3f7; }
 
@@ -323,12 +324,21 @@ def render_area_box(cat: Catalog, area: dict, concepts: dict,
         return pin("area", aid, aname, field, label)
 
     def area_tags(ids):
-        # Linked tags showing each related area's display name (not its id).
+        # Show each referenced area by its display name. Link only when the
+        # area actually exists; otherwise mark it undefined (a dangling id
+        # reference — e.g. a child area that was never created).
         if not ids:
             return '<span class="muted">—</span>'
-        return "".join(
-            f'<a class="tag area" href="#area-{e(i)}">{e(_area_name(area_map, i))}</a>'
-            for i in ids)
+        out = ""
+        for i in ids:
+            if i in area_map:
+                out += (f'<a class="tag area" href="#area-{e(i)}">'
+                        f'{e(_area_name(area_map, i))}</a>')
+            else:
+                out += (f'<span class="tag area undef" '
+                        f'title="{e(cat.t("area.undefined"))}: {e(i)}">'
+                        f'{e(i)} ({e(cat.t("area.undefined"))})</span>')
+        return out
 
     # The concepts this area touches, with its CRUD ops (area-side view).
     # Each row is individually commentable.

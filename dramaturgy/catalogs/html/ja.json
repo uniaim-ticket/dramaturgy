@@ -40,6 +40,7 @@
   "label.parent": "親領域",
   "label.children": "子領域",
   "label.related": "関連領域",
+  "area.undefined": "未定義",
   "label.actions": "行動",
   "label.states": "状態",
   "areas.hint": "ボックスをクリックすると、その領域の詳細が展開します。",

@@ -71,6 +71,14 @@ Overview business flow (important):
   whole area.
 - Detailed step lists can still go in `flows`; overview_flow is the summary.
 
+Hierarchy (parent/child/related) — important:
+- The area hierarchy is owned by the area tree. **Copy `parent_area_id` /
+  `child_area_ids` / `related_area_ids` verbatim from the area in the analysis
+  pack.**
+- **Do not invent new area ids.** Never put an area id that isn't in the area
+  tree into child/parent/related (don't turn sub-features into child areas).
+  If the pack has none, leave them as empty arrays / null.
+
 Output area-map JSON shape (for this area):
 
 ```json

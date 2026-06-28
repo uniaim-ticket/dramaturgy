@@ -269,6 +269,32 @@ class ConceptCrudTests(unittest.TestCase):
         self.assertEqual(by_area, {"sales": "CRU", "admin": "RUD"})
         self.assertEqual(sorted(order["related_areas"]), ["admin", "sales"])
 
+    def test_merge_drops_dangling_area_refs(self):
+        from dramaturgy.commands.merge_maps import merge
+
+        class _UI:
+            def t(self, *a, **k):
+                return ""
+        # 'a' references a child/related area that was never created.
+        maps = [{"content_lang": "ja", "system": {"name": "S"},
+                 "areas": [
+                     {"id": "a", "name": "A", "concepts": [], "concept_crud": [],
+                      "child_area_ids": ["ghost", "b"],
+                      "related_area_ids": ["nope"], "parent_area_id": "missing"},
+                     {"id": "b", "name": "B", "concepts": [], "concept_crud": [],
+                      "child_area_ids": [], "related_area_ids": []}],
+                 "concepts": [], "actors": [], "flows": []}]
+        merged, _ = merge(maps, _UI())
+        a = next(x for x in merged["areas"] if x["id"] == "a")
+        # Only real ids survive; dangling ones are dropped and reported.
+        self.assertEqual(a["child_area_ids"], ["b"])
+        self.assertEqual(a["related_area_ids"], [])
+        self.assertIsNone(a["parent_area_id"])
+        dropped = merged["merge_report"]["dropped_area_refs"]
+        self.assertIn(["a", "child_area_ids", "ghost"], dropped)
+        self.assertIn(["a", "related_area_ids", "nope"], dropped)
+        self.assertIn(["a", "parent_area_id", "missing"], dropped)
+
     def test_crud_table_rows_and_jump_links(self):
         from dramaturgy.commands.merge_maps import merge
         from dramaturgy.commands.render_html import render_html

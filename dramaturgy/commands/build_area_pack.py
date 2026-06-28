@@ -37,6 +37,11 @@ def build_pack(area: dict, source_index: dict) -> dict:
             "primary_actors": area.get("primary_actors", []),
             "primary_concepts": area.get("primary_concepts", []),
             "source_hints": area.get("source_hints", {}),
+            # Authoritative hierarchy from the area tree — the card must copy
+            # these verbatim and never invent area ids.
+            "parent_area_id": area.get("parent_area_id"),
+            "child_area_ids": area.get("child_area_ids", []),
+            "related_area_ids": area.get("related_area_ids", []),
         },
         "instructions": (
             "Open and read the files listed below to discover the area's "

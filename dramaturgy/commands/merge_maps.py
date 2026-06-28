@@ -118,6 +118,24 @@ def merge(maps: list[dict], ui) -> tuple[dict, list]:
     # backfill concept.related_areas from where it is used.
     _aggregate_concept_crud(areas, concepts)
 
+    # Defense: a card may reference area ids that don't exist (Claude
+    # occasionally invents child/related sub-areas). Drop dangling references
+    # so the map never contains broken links; record what was dropped.
+    dropped_refs: list = []
+    for area in areas.values():
+        for field in ("child_area_ids", "related_area_ids"):
+            vals = area.get(field) or []
+            kept = [i for i in vals if i in areas]
+            for i in vals:
+                if i not in areas:
+                    dropped_refs.append([area["id"], field, i])
+            if vals:
+                area[field] = kept
+        parent_id = area.get("parent_area_id")
+        if parent_id and parent_id not in areas:
+            dropped_refs.append([area["id"], "parent_area_id", parent_id])
+            area["parent_area_id"] = None
+
     # Backfill related links symmetrically and check parent/child.
     for area in areas.values():
         for rel in area.get("related_area_ids", []):
@@ -153,6 +171,7 @@ def merge(maps: list[dict], ui) -> tuple[dict, list]:
             "parent_child_issues": [p[1:] for p in problems
                                     if p[0] == "parent_child"],
             "orphan_areas": orphans,
+            "dropped_area_refs": dropped_refs,
         },
     }
     return merged, problems

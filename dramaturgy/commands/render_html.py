@@ -119,8 +119,14 @@ a.tag.area:hover { background: #d3e2fb; }
 .sl-head { display: grid; gap: 0; position: sticky; top: 38px; z-index: 5; }
 .sl-lane { padding: 6px 8px; font-size: 12px; font-weight: 600; color: #41506a;
   text-align: center; background: #e9eef4; border-right: 1px solid #dde3ea;
-  border-bottom: 1px solid #dde3ea; }
+  border-bottom: 1px solid #dde3ea; display: flex; align-items: center;
+  justify-content: center; gap: 5px; }
 .sl-lane:last-child { border-right: 0; }
+/* Person/system icon before an actor name. Color-coded by category. */
+.actor-icon { display: inline-flex; flex: none; line-height: 0; }
+.actor-icon svg { vertical-align: middle; }
+.actor-icon.person { color: #2563eb; }
+.actor-icon.sys { color: #6b7280; }
 .sl-row { display: grid; gap: 0; border-top: 1px solid #eef1f4;
   background-image: none; }
 /* Boundary between unrelated use cases sharing the same area. */
@@ -262,6 +268,30 @@ def _area_name(areas: dict, aid: str) -> str:
     return a.get("name") if a and a.get("name") else aid
 
 
+# Inline SVG glyphs distinguishing a business person from a system actor.
+# Inline (not emoji) so they render consistently and inherit currentColor.
+_ICON_PERSON = (
+    '<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">'
+    '<circle cx="8" cy="4.5" r="2.6" fill="currentColor"/>'
+    '<path d="M2.5 14c0-3 2.5-5 5.5-5s5.5 2 5.5 5z" fill="currentColor"/></svg>')
+_ICON_SYSTEM = (
+    '<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">'
+    '<rect x="2" y="2.5" width="12" height="7" rx="1" fill="none" '
+    'stroke="currentColor" stroke-width="1.4"/>'
+    '<rect x="6" y="11" width="4" height="2" fill="currentColor"/>'
+    '<rect x="4" y="13" width="8" height="1.4" rx="0.7" fill="currentColor"/></svg>')
+
+
+def actor_icon(cat: Catalog, category: str | None) -> str:
+    """A small icon marking whether an actor is a business person or a system,
+    shown before the actor name (e.g. in swimlane lane headers)."""
+    is_system = category == "system"
+    glyph = _ICON_SYSTEM if is_system else _ICON_PERSON
+    label = cat.t("actors.system" if is_system else "actors.person")
+    cls = "actor-icon " + ("sys" if is_system else "person")
+    return f'<span class="{cls}" title="{e(label)}">{glyph}</span>'
+
+
 def render_swimlane(cat: Catalog, flow: dict, actors: dict) -> str:
     """Render an overview business flow as a swimlane diagram.
 
@@ -290,9 +320,15 @@ def render_swimlane(cat: Catalog, flow: dict, actors: dict) -> str:
         a = actors.get(ln)
         return a.get("name") if a and a.get("name") else ln
 
-    # Header row of lane names.
-    cells = "".join(f'<div class="sl-lane">{e(lane_label(ln))}</div>'
-                    for ln in lanes)
+    def lane_category(ln):
+        a = actors.get(ln)
+        return a.get("category") if a else None
+
+    # Header row of lane names, each prefixed with a person/system icon.
+    cells = "".join(
+        f'<div class="sl-lane">{actor_icon(cat, lane_category(ln))}'
+        f'<span class="sl-lane-name">{e(lane_label(ln))}</span></div>'
+        for ln in lanes)
     # Steps may belong to different use cases within the same area (e.g.
     # "master approval" vs. "batch monitoring") that share actors but are not
     # part of one continuous flow. We keep a single swimlane and draw a

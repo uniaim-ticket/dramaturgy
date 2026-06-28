@@ -451,6 +451,11 @@ class OverviewFlowTests(unittest.TestCase):
         self.assertIn("申込", area)
         self.assertIn('class="sl-n">1<', area)
         self.assertIn('data-rv-field="overview_flow"', area)
+        # Lane headers carry a person/system icon before each actor name.
+        head = area[area.index('class="sl-head"'):area.index('class="sl-row"')]
+        self.assertIn('actor-icon person', head)
+        self.assertIn('actor-icon sys', head)
+        self.assertEqual(head.count("<svg"), 2)
 
     def test_no_flow_no_swimlane(self):
         from dramaturgy.commands.render_html import render_html

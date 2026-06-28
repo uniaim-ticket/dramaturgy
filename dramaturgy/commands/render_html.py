@@ -88,13 +88,15 @@ td { overflow-wrap: anywhere; }
 /* Overview business flow (swimlane) */
 .overview-flow { margin: 12px 0 16px; }
 .overview-flow h4 { margin: 0 0 8px; font-size: 13px; color: #41506a; }
-.swimlane { border: 1px solid #e2e6ea; border-radius: 8px; overflow: hidden;
-  background: #fbfcfd; }
+/* no overflow:hidden here — it would trap the sticky lane header */
+.swimlane { border: 1px solid #e2e6ea; border-radius: 8px; background: #fbfcfd; }
 .sl-title { padding: 6px 10px; font-weight: 600; font-size: 13px;
-  background: #eef3f8; border-bottom: 1px solid #e2e6ea; }
-.sl-head { display: grid; gap: 0; }
+  background: #eef3f8; border-bottom: 1px solid #e2e6ea; border-radius: 8px 8px 0 0; }
+/* Lane (actor) header sticks below the page nav while the flow scrolls. */
+.sl-head { display: grid; gap: 0; position: sticky; top: 46px; z-index: 5; }
 .sl-lane { padding: 6px 8px; font-size: 12px; font-weight: 600; color: #41506a;
-  text-align: center; background: #e9eef4; border-right: 1px solid #dde3ea; }
+  text-align: center; background: #e9eef4; border-right: 1px solid #dde3ea;
+  border-bottom: 1px solid #dde3ea; }
 .sl-lane:last-child { border-right: 0; }
 .sl-row { display: grid; gap: 0; border-top: 1px solid #eef1f4;
   background-image: none; }

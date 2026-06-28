@@ -148,10 +148,11 @@ code { background: #f0f3f6; padding: 1px 4px; border-radius: 3px; font-size: 12p
   font-size: 13px; color: #41506a; align-items: flex-start; }
 /* Make the sort <select> look like the combobox button (resting state). */
 .crud-controls select { font-size: 13px; padding: 4px 26px 4px 10px;
-  border: 1px solid #c4ccd4; border-radius: 6px; background: #fff;
+  border: 1px solid #c4ccd4; border-radius: 6px; background-color: #fff;
   color: #1c1f23; cursor: pointer; appearance: none; -webkit-appearance: none;
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6' fill='none' stroke='%2341506a' stroke-width='1.5'><path d='M1 1l4 4 4-4'/></svg>");
-  background-repeat: no-repeat; background-position: right 9px center; }
+  background-image: url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6' fill='none' stroke='%2341506a' stroke-width='1.5'%3E%3Cpath d='M1 1l4 4 4-4'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 9px center;
+  background-size: 10px 6px; }
 /* Searchable multi-select combobox */
 .ms { position: relative; }
 .ms-btn { font-size: 13px; padding: 4px 10px; border: 1px solid #c4ccd4;

@@ -12,7 +12,16 @@ header h1 { margin: 0; font-size: 18px; }
 header .sub { font-size: 12px; opacity: .75; }
 header .spacer { flex: 1; }
 header .langs { display: flex; align-items: center; gap: 10px; font-size: 12px; }
-header select { font-size: 12px; }
+/* Header language selects styled like the combobox controls (dark theme). */
+header select {
+  font-size: 12px; padding: 3px 22px 3px 8px; color: #eaf0f6;
+  background-color: #2a3a4c; border: 1px solid #45566a; border-radius: 6px;
+  cursor: pointer; appearance: none; -webkit-appearance: none;
+  background-image: url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6' fill='none' stroke='%23cfe0f0' stroke-width='1.5'%3E%3Cpath d='M1 1l4 4 4-4'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 7px center;
+  background-size: 10px 6px;
+}
+header select option { color: #1c1f23; background: #fff; }
 
 .topbar-job { font-size: 12px; padding: 4px 18px; background: #2a3a2f; color: #d7e2ee; }
 .topbar-job:empty { display: none; }

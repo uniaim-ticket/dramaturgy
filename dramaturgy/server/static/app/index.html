@@ -12,12 +12,12 @@
   <button id="toggle-dev" data-i="dev.toggle" aria-pressed="false">Developer mode</button>
   <div class="sub" id="repo-info"></div>
   <div class="spacer"></div>
-  <button id="toggle-init-instr" class="dev-only" data-i="init.instr_toggle">Instructions</button>
-  <button id="run-init" class="claude dev-only" data-i="init.run">Initialize all with Claude</button>
+  <button id="toggle-init-instr" class="dev-only" data-i="init.instr_toggle">Analysis instructions</button>
+  <button id="run-init" class="claude dev-only" data-i="init.run">Analyze all</button>
   <div class="langs dev-only">
     <label>ui <select id="ui-lang"><option>ja</option><option>en</option></select></label>
     <label>content <select id="content-lang"><option>ja</option><option>en</option></select></label>
-    <button id="save-config" data-i="btn.save_config">Save</button>
+    <button id="save-config" data-i="btn.save_config">Save settings</button>
   </div>
 </header>
 
@@ -39,9 +39,9 @@
       <span data-i="viewer.title">Meaning map preview</span>
       <span class="muted tiny" data-i="viewer.pin_hint">Click + on any item to add a finding.</span>
       <div class="spacer"></div>
-      <button id="refresh-view" data-i="viewer.refresh">Refresh</button>
-      <button id="export-doc" data-i="viewer.export">Export document</button>
-      <button id="toggle-queue" data-i="viewer.toggle_queue">Hide queue</button>
+      <button id="refresh-view" data-i="viewer.refresh">Refresh map</button>
+      <button id="export-doc" data-i="viewer.export">Export HTML</button>
+      <button id="toggle-queue" data-i="viewer.hide_queue">Hide findings</button>
     </div>
     <iframe id="view-frame" src="about:blank"></iframe>
   </section>

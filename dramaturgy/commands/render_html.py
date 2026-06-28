@@ -41,7 +41,9 @@ section { background: #fff; border: 1px solid #e2e6ea; border-radius: 8px;
   padding: 20px; margin-bottom: 24px; }
 section > h2 { margin-top: 0; border-bottom: 2px solid #eef1f4; padding-bottom: 8px; }
 /* Anchored items must clear the sticky nav when scrolled to. */
-section, details.box, .box[id], [id^="actor-"] { scroll-margin-top: 52px; }
+section, details.box, .box[id], [id^="actor-"],
+[id^="concept-"], [id^="classification-"], [id^="component-"] {
+  scroll-margin-top: 52px; }
 
 /* Area boxes: grid of clickable cards that expand in place. */
 .box-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
@@ -457,8 +459,10 @@ def render_concept_tables(cat: Catalog, concepts: list, areas: dict,
 
         area_links = [_area_name(areas, aid) for aid in c.get("related_areas", [])]
         # data-tags lets the inline filter show/hide rows by tag.
+        # id="concept-<id>" is the jump target used by CRUD links.
         rows += (
-            f'<tr class="concept-row" data-tags="{e(" ".join(ctags))}">'
+            f'<tr class="concept-row" id="concept-{e(cid)}" '
+            f'data-tags="{e(" ".join(ctags))}">'
             f'<td class="brk"><b>{e(cname)}</b>{cpin("", cname)}<br>'
             f"<span class='muted'>{e(c.get('description'))}"
             f"{cpin('description', cat.t('label.concepts'))}</span></td>"

@@ -287,6 +287,9 @@ class ConceptCrudTests(unittest.TestCase):
         self.assertIn('href="#area-sales"', crud)
         self.assertIn('href="#concept-order"', crud)
         self.assertIn('class="jump"', crud)
+        # Both jump targets must actually exist as anchors in the document.
+        self.assertIn('id="area-sales"', html)
+        self.assertIn('id="concept-order"', html)
         # Filters are searchable multi-select comboboxes (checkbox options).
         self.assertEqual(crud.count('class="ms"'), 2)
         self.assertIn('class="ms-search"', crud)

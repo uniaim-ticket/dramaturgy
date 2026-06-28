@@ -30,8 +30,10 @@ CSS = """
 body { font-family: system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP",
   sans-serif; margin: 0; color: #1c1f23; background: #f6f7f9; line-height: 1.6; }
 .tiny { font-size: 12px; }
-nav { position: sticky; top: 0; background: #243140; padding: 8px 24px;
-  display: flex; gap: 16px; flex-wrap: wrap; z-index: 10; }
+/* Fixed nav height so the sticky lane header can butt right up against it. */
+nav { position: sticky; top: 0; background: #243140; padding: 0 24px;
+  height: 38px; display: flex; align-items: center; gap: 16px;
+  overflow-x: auto; white-space: nowrap; z-index: 10; }
 nav a { color: #cfe0f0; text-decoration: none; font-size: 13px; }
 nav a:hover { color: #fff; }
 main { max-width: 1100px; margin: 0 auto; padding: 24px; }
@@ -41,7 +43,7 @@ section > h2 { margin-top: 0; border-bottom: 2px solid #eef1f4; padding-bottom: 
 /* Anchored items must clear the sticky nav when scrolled to. */
 section, details.box, .box[id], [id^="actor-"],
 [id^="concept-"], [id^="classification-"], [id^="component-"] {
-  scroll-margin-top: 52px; }
+  scroll-margin-top: 40px; }
 
 /* Area boxes: grid of clickable cards that expand in place. */
 .box-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
@@ -94,7 +96,7 @@ td { overflow-wrap: anywhere; }
 .sl-title { padding: 6px 10px; font-weight: 600; font-size: 13px;
   background: #eef3f8; border-bottom: 1px solid #e2e6ea; border-radius: 8px 8px 0 0; }
 /* Lane (actor) header sticks below the page nav while the flow scrolls. */
-.sl-head { display: grid; gap: 0; position: sticky; top: 46px; z-index: 5; }
+.sl-head { display: grid; gap: 0; position: sticky; top: 38px; z-index: 5; }
 .sl-lane { padding: 6px 8px; font-size: 12px; font-weight: 600; color: #41506a;
   text-align: center; background: #e9eef4; border-right: 1px solid #dde3ea;
   border-bottom: 1px solid #dde3ea; }

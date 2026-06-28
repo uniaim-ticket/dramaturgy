@@ -17,6 +17,7 @@ Views:
 from __future__ import annotations
 
 import argparse
+import contextvars
 import html
 import json
 from pathlib import Path
@@ -36,6 +37,12 @@ nav { position: sticky; top: 0; background: #243140; padding: 0 24px;
   overflow-x: auto; white-space: nowrap; z-index: 10; }
 nav a { color: #cfe0f0; text-decoration: none; font-size: 13px; }
 nav a:hover { color: #fff; }
+/* Standalone export's developer-details toggle, pinned to the right of nav. */
+.nav-dev-toggle { margin-left: auto; font-size: 12px; padding: 3px 10px;
+  color: #cfe0f0; background: #2a3a4c; border: 1px solid #45566a;
+  border-radius: 6px; cursor: pointer; flex: none; }
+.nav-dev-toggle[aria-pressed="true"] { background: #b45309; color: #fff;
+  border-color: #b45309; }
 /* Developer-only items (code refs, APIs, screens, validation): hidden for
    non-developers, revealed when the app shell adds `dev` to <body>. */
 .dev-only { display: none; }
@@ -220,6 +227,12 @@ def conf_badge(cat: Catalog, level: str) -> str:
     return f'<span class="conf-{e(level)}">{e(cat.t(f"confidence.{level}"))}</span>'
 
 
+# When rendering a standalone export (a shareable document, not the live app),
+# review pins are omitted. Threading a flag through every render helper would
+# be noisy, so the mode lives in a context variable that pin() consults.
+_EXPORT = contextvars.ContextVar("dramaturgy_export", default=False)
+
+
 def pin(target_type: str, target_id: str, target_name: str,
         field: str = "", field_label: str = "") -> str:
     """A small inline button to attach a review finding to an item.
@@ -232,7 +245,11 @@ def pin(target_type: str, target_id: str, target_name: str,
     "purpose", "crud:order", an actor action). ``field_label`` is the
     human-readable thing being commented on. Both are optional; without them
     the pin targets the whole item.
+
+    Returns empty in export mode — a shared document has no review queue.
     """
+    if _EXPORT.get():
+        return ""
     attrs = (f' data-rv-type="{e(target_type)}"'
              f' data-rv-id="{e(target_id)}"'
              f' data-rv-name="{e(target_name)}"')
@@ -834,12 +851,226 @@ def render_validation(cat: Catalog, mm: dict) -> str:
     return "".join(blocks) or f'<p class="muted">{e(cat.t("empty.none"))}</p>'
 
 
-def render_html(mm: dict, ui_lang: str, vocab: dict | None = None) -> str:
+# --- inline page scripts ------------------------------------------------
+# Plain string constants (not f-strings) so braces stay literal. Assembled
+# per render mode below: the interactive bits (tag filter, CRUD table) are
+# shared; the app-coupled bits (review pins, viewstate persistence tied to the
+# shell's reloads) are app-only; the export build gets a self-contained dev
+# toggle so the standalone file is complete.
+
+# Shared: concept tag filter + CRUD sort/filter + the multiselect combobox.
+_JS_INTERACTIVE = r"""
+// Concept tag filter: click a chip to show only matching concept rows.
+(function () {
+  var bar = document.getElementById('concept-tag-filter');
+  if (!bar) return;
+  bar.addEventListener('click', function (ev) {
+    var chip = ev.target.closest('.tagchip.filter');
+    if (!chip) return;
+    var tag = chip.dataset.tag;
+    bar.querySelectorAll('.tagchip.filter').forEach(function (c) {
+      c.classList.toggle('active', c === chip);
+    });
+    document.querySelectorAll('.concept-row').forEach(function (row) {
+      var tags = (row.dataset.tags || '').split(' ').filter(Boolean);
+      row.style.display = (tag === '*' || tags.indexOf(tag) >= 0) ? '' : 'none';
+    });
+  });
+})();
+
+// Searchable multi-select combobox: checkbox list + search; empty = all.
+function setupMultiSelect(box, onChange) {
+  var btn = box.querySelector('.ms-btn');
+  var panel = box.querySelector('.ms-panel');
+  var search = box.querySelector('.ms-search');
+  var summary = box.querySelector('.ms-summary');
+  var allLabel = btn.dataset.all;
+  var selFmt = btn.dataset.selfmt;   // e.g. "{n} 件選択"
+
+  btn.addEventListener('click', function () {
+    panel.hidden = !panel.hidden;
+    if (!panel.hidden) { search.value = ''; filter(''); search.focus(); }
+  });
+  document.addEventListener('click', function (ev) {
+    if (!box.contains(ev.target)) panel.hidden = true;
+  });
+  function filter(q) {
+    q = q.toLowerCase();
+    box.querySelectorAll('.ms-opt').forEach(function (o) {
+      o.style.display = o.dataset.text.indexOf(q) >= 0 ? '' : 'none';
+    });
+  }
+  search.addEventListener('input', function () { filter(search.value); });
+  box.addEventListener('change', function () {
+    var sel = box.selected();
+    summary.textContent = sel.length
+      ? selFmt.replace('{n}', sel.length) : allLabel;
+    onChange();
+  });
+  box.selected = function () {
+    return Array.prototype.slice
+      .call(box.querySelectorAll('input:checked')).map(function (i) { return i.value; });
+  };
+}
+
+// CRUD table: sort by concept/area, filter by selected areas and/or concepts.
+(function () {
+  var tbody = document.getElementById('crud-tbody');
+  if (!tbody) return;
+  var sortSel = document.getElementById('crud-sort');
+  var areaBox = document.getElementById('crud-filter-area');
+  var conceptBox = document.getElementById('crud-filter-concept');
+  var rows = Array.prototype.slice.call(tbody.querySelectorAll('.crud-row'));
+
+  function apply() {
+    var by = sortSel.value;            // 'concept' | 'area'
+    var fa = areaBox.selected(), fc = conceptBox.selected();
+    var sorted = rows.slice().sort(function (a, b) {
+      var p = by === 'area'
+        ? ['aorder', 'corder'] : ['corder', 'aorder'];
+      var d = (+a.dataset[p[0]]) - (+b.dataset[p[0]]);
+      return d !== 0 ? d : (+a.dataset[p[1]]) - (+b.dataset[p[1]]);
+    });
+    sorted.forEach(function (row) {
+      var ok = (fa.length === 0 || fa.indexOf(row.dataset.area) >= 0) &&
+               (fc.length === 0 || fc.indexOf(row.dataset.concept) >= 0);
+      row.style.display = ok ? '' : 'none';
+      tbody.appendChild(row);   // reorder in place
+    });
+  }
+  setupMultiSelect(areaBox, apply);
+  setupMultiSelect(conceptBox, apply);
+  sortSel.addEventListener('change', apply);
+  apply();
+})();
+"""
+
+# App-only: persist scroll + expanded boxes across the shell's iframe reloads.
+_JS_VIEWSTATE = r"""
+// Preserve UI state across reloads (the app shell reloads this iframe after a
+// finding runs). We remember which area boxes are expanded and the scroll
+// position in sessionStorage, keyed by path so it is stable across the
+// cache-busting query string, and restore them on load.
+(function () {
+  var KEY = 'dramaturgy.viewstate:' + location.pathname;
+  function load() {
+    try { return JSON.parse(sessionStorage.getItem(KEY)) || {}; }
+    catch (e) { return {}; }
+  }
+  function save(s) {
+    try { sessionStorage.setItem(KEY, JSON.stringify(s)); } catch (e) {}
+  }
+  var state = load();
+
+  // Restore expanded <details> (by id) before measuring/scrolling.
+  var open = state.open || [];
+  open.forEach(function (id) {
+    var el = document.getElementById(id);
+    if (el && el.tagName === 'DETAILS') el.open = true;
+  });
+  // Restore scroll after layout settles (reopened boxes change the height).
+  if (typeof state.scrollY === 'number') {
+    var y = state.scrollY;
+    requestAnimationFrame(function () { window.scrollTo(0, y); });
+    window.addEventListener('load', function () { window.scrollTo(0, y); });
+  }
+
+  // Track open/close of any details box.
+  document.addEventListener('toggle', function (ev) {
+    var d = ev.target;
+    if (!d || d.tagName !== 'DETAILS' || !d.id) return;
+    state = load();
+    var set = new Set(state.open || []);
+    if (d.open) set.add(d.id); else set.delete(d.id);
+    state.open = Array.from(set);
+    save(state);
+  }, true);
+
+  // Track scroll (throttled via rAF) so the latest position is persisted.
+  var ticking = false;
+  window.addEventListener('scroll', function () {
+    if (ticking) return;
+    ticking = true;
+    requestAnimationFrame(function () {
+      state = load(); state.scrollY = window.scrollY; save(state);
+      ticking = false;
+    });
+  }, { passive: true });
+})();
+"""
+
+# App-only: developer mode driven by the shell (?dev=1 query + postMessage),
+# and review-pin clicks forwarded to the shell.
+_JS_APP_DEV_AND_PINS = r"""
+// Developer mode: hides/shows developer-facing items (code refs, APIs,
+// screens, validation). Initial state comes from the ?dev=1 query (so it
+// survives iframe refreshes); the app shell also toggles it via postMessage.
+(function () {
+  function setDev(on) { document.body.classList.toggle('dev', !!on); }
+  setDev(/[?&]dev=1\b/.test(location.search));
+  window.addEventListener('message', function (ev) {
+    var d = ev.data;
+    if (d && d.source === 'dramaturgy-shell' && d.type === 'dev-mode') setDev(d.on);
+  });
+})();
+
+// Inline review: clicking a + pin tells the parent app to open the finding
+// popover for that item. No-op when opened standalone (no parent listener).
+document.addEventListener('click', function (ev) {
+  var b = ev.target.closest('.rv-pin');
+  if (!b) return;
+  ev.preventDefault();
+  var msg = { source: 'dramaturgy-review', target_type: b.dataset.rvType,
+    target_id: b.dataset.rvId, target_name: b.dataset.rvName,
+    field: b.dataset.rvField || '', field_label: b.dataset.rvFieldLabel || '' };
+  if (window.parent && window.parent !== window) window.parent.postMessage(msg, '*');
+});
+"""
+
+# Export-only: a self-contained developer-details toggle (the standalone file
+# has no app shell to drive it). Reuses the same body.dev mechanism.
+_JS_EXPORT_DEV = r"""
+// Developer details toggle for the standalone document. Flips body.dev so the
+// dev-only items (code refs, APIs, screens, validation) show/hide. Persisted
+// in localStorage so the choice sticks.
+(function () {
+  var btn = document.getElementById('dev-toggle');
+  if (!btn) return;
+  function setDev(on) {
+    document.body.classList.toggle('dev', on);
+    btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    try { localStorage.setItem('dramaturgy.export.dev', on ? '1' : '0'); } catch (e) {}
+  }
+  setDev((function () {
+    try { return localStorage.getItem('dramaturgy.export.dev') === '1'; }
+    catch (e) { return false; }
+  })());
+  btn.addEventListener('click', function () {
+    setDev(!document.body.classList.contains('dev'));
+  });
+})();
+"""
+
+
+def render_html(mm: dict, ui_lang: str, vocab: dict | None = None,
+                export: bool = False) -> str:
     content_lang = mm.get("content_lang") or ui_lang
     cat = Catalog(ui_lang, domain="html")
     system = mm.get("system", {})
     vocab = vocab or {"tags": [], "groups": []}
 
+    # Export mode suppresses review pins (see pin()). The token is reset in a
+    # finally so a render never leaks the mode to a later call on this thread.
+    token = _EXPORT.set(export)
+    try:
+        return _render_html_body(mm, ui_lang, vocab, cat, content_lang,
+                                 system, export)
+    finally:
+        _EXPORT.reset(token)
+
+
+def _render_html_body(mm, ui_lang, vocab, cat, content_lang, system,
+                      export: bool) -> str:
     lang_note = ""
     if content_lang != ui_lang:
         lang_note = (f'<p class="muted tiny">'
@@ -856,6 +1087,11 @@ def render_html(mm: dict, ui_lang: str, vocab: dict | None = None) -> str:
     nav = "".join(
         f'<a href="#{anchor}"{" class=\"dev-only\"" if dev else ""}>{e(cat.t(key))}</a>'
         for anchor, key, dev in nav_items)
+    # The standalone export has no app shell, so it carries its own developer
+    # details toggle in the nav (the live view is driven by the shell button).
+    if export:
+        nav += (f'<button id="dev-toggle" class="nav-dev-toggle" '
+                f'aria-pressed="false">{e(cat.t("dev.toggle"))}</button>')
 
     areas = mm.get("areas", [])
     concepts = mm.get("concepts", [])
@@ -880,6 +1116,15 @@ def render_html(mm: dict, ui_lang: str, vocab: dict | None = None) -> str:
         f'{render_validation(cat, mm)}</section>',
     ]
 
+    # Assemble the page scripts for this mode. The interactive bits are always
+    # included; the app build adds viewstate persistence + the shell-driven dev
+    # mode and review-pin forwarding; the export build adds a self-contained
+    # developer-details toggle instead.
+    if export:
+        scripts = _JS_INTERACTIVE + _JS_EXPORT_DEV
+    else:
+        scripts = _JS_VIEWSTATE + _JS_APP_DEV_AND_PINS + _JS_INTERACTIVE
+
     return f"""<!DOCTYPE html>
 <html lang="{e(content_lang)}">
 <head>
@@ -892,164 +1137,7 @@ def render_html(mm: dict, ui_lang: str, vocab: dict | None = None) -> str:
 <nav>{nav}</nav>
 <main>{lang_note}{"".join(sections)}</main>
 <script>
-// Preserve UI state across reloads (the app shell reloads this iframe after a
-// finding runs). We remember which area boxes are expanded and the scroll
-// position in sessionStorage, keyed by path so it is stable across the
-// cache-busting query string, and restore them on load.
-(function () {{
-  var KEY = 'dramaturgy.viewstate:' + location.pathname;
-  function load() {{
-    try {{ return JSON.parse(sessionStorage.getItem(KEY)) || {{}}; }}
-    catch (e) {{ return {{}}; }}
-  }}
-  function save(s) {{
-    try {{ sessionStorage.setItem(KEY, JSON.stringify(s)); }} catch (e) {{}}
-  }}
-  var state = load();
-
-  // Restore expanded <details> (by id) before measuring/scrolling.
-  var open = state.open || [];
-  open.forEach(function (id) {{
-    var el = document.getElementById(id);
-    if (el && el.tagName === 'DETAILS') el.open = true;
-  }});
-  // Restore scroll after layout settles (reopened boxes change the height).
-  if (typeof state.scrollY === 'number') {{
-    var y = state.scrollY;
-    requestAnimationFrame(function () {{ window.scrollTo(0, y); }});
-    window.addEventListener('load', function () {{ window.scrollTo(0, y); }});
-  }}
-
-  // Track open/close of any details box.
-  document.addEventListener('toggle', function (ev) {{
-    var d = ev.target;
-    if (!d || d.tagName !== 'DETAILS' || !d.id) return;
-    state = load();
-    var set = new Set(state.open || []);
-    if (d.open) set.add(d.id); else set.delete(d.id);
-    state.open = Array.from(set);
-    save(state);
-  }}, true);
-
-  // Track scroll (throttled via rAF) so the latest position is persisted.
-  var ticking = false;
-  window.addEventListener('scroll', function () {{
-    if (ticking) return;
-    ticking = true;
-    requestAnimationFrame(function () {{
-      state = load(); state.scrollY = window.scrollY; save(state);
-      ticking = false;
-    }});
-  }}, {{ passive: true }});
-}})();
-
-// Developer mode: hides/shows developer-facing items (code refs, APIs,
-// screens, validation). Initial state comes from the ?dev=1 query (so it
-// survives iframe refreshes); the app shell also toggles it via postMessage.
-(function () {{
-  function setDev(on) {{ document.body.classList.toggle('dev', !!on); }}
-  setDev(/[?&]dev=1\\b/.test(location.search));
-  window.addEventListener('message', function (ev) {{
-    var d = ev.data;
-    if (d && d.source === 'dramaturgy-shell' && d.type === 'dev-mode') setDev(d.on);
-  }});
-}})();
-
-// Inline review: clicking a + pin tells the parent app to open the finding
-// popover for that item. No-op when opened standalone (no parent listener).
-document.addEventListener('click', function (ev) {{
-  var b = ev.target.closest('.rv-pin');
-  if (!b) return;
-  ev.preventDefault();
-  var msg = {{ source: 'dramaturgy-review', target_type: b.dataset.rvType,
-    target_id: b.dataset.rvId, target_name: b.dataset.rvName,
-    field: b.dataset.rvField || '', field_label: b.dataset.rvFieldLabel || '' }};
-  if (window.parent && window.parent !== window) window.parent.postMessage(msg, '*');
-}});
-
-// Concept tag filter: click a chip to show only matching concept rows.
-(function () {{
-  var bar = document.getElementById('concept-tag-filter');
-  if (!bar) return;
-  bar.addEventListener('click', function (ev) {{
-    var chip = ev.target.closest('.tagchip.filter');
-    if (!chip) return;
-    var tag = chip.dataset.tag;
-    bar.querySelectorAll('.tagchip.filter').forEach(function (c) {{
-      c.classList.toggle('active', c === chip);
-    }});
-    document.querySelectorAll('.concept-row').forEach(function (row) {{
-      var tags = (row.dataset.tags || '').split(' ').filter(Boolean);
-      row.style.display = (tag === '*' || tags.indexOf(tag) >= 0) ? '' : 'none';
-    }});
-  }});
-}})();
-
-// Searchable multi-select combobox: checkbox list + search; empty = all.
-function setupMultiSelect(box, onChange) {{
-  var btn = box.querySelector('.ms-btn');
-  var panel = box.querySelector('.ms-panel');
-  var search = box.querySelector('.ms-search');
-  var summary = box.querySelector('.ms-summary');
-  var allLabel = btn.dataset.all;
-  var selFmt = btn.dataset.selfmt;   // e.g. "{{n}} 件選択"
-
-  btn.addEventListener('click', function () {{
-    panel.hidden = !panel.hidden;
-    if (!panel.hidden) {{ search.value = ''; filter(''); search.focus(); }}
-  }});
-  document.addEventListener('click', function (ev) {{
-    if (!box.contains(ev.target)) panel.hidden = true;
-  }});
-  function filter(q) {{
-    q = q.toLowerCase();
-    box.querySelectorAll('.ms-opt').forEach(function (o) {{
-      o.style.display = o.dataset.text.indexOf(q) >= 0 ? '' : 'none';
-    }});
-  }}
-  search.addEventListener('input', function () {{ filter(search.value); }});
-  box.addEventListener('change', function () {{
-    var sel = box.selected();
-    summary.textContent = sel.length
-      ? selFmt.replace('{{n}}', sel.length) : allLabel;
-    onChange();
-  }});
-  box.selected = function () {{
-    return Array.prototype.slice
-      .call(box.querySelectorAll('input:checked')).map(function (i) {{ return i.value; }});
-  }};
-}}
-
-// CRUD table: sort by concept/area, filter by selected areas and/or concepts.
-(function () {{
-  var tbody = document.getElementById('crud-tbody');
-  if (!tbody) return;
-  var sortSel = document.getElementById('crud-sort');
-  var areaBox = document.getElementById('crud-filter-area');
-  var conceptBox = document.getElementById('crud-filter-concept');
-  var rows = Array.prototype.slice.call(tbody.querySelectorAll('.crud-row'));
-
-  function apply() {{
-    var by = sortSel.value;            // 'concept' | 'area'
-    var fa = areaBox.selected(), fc = conceptBox.selected();
-    var sorted = rows.slice().sort(function (a, b) {{
-      var p = by === 'area'
-        ? ['aorder', 'corder'] : ['corder', 'aorder'];
-      var d = (+a.dataset[p[0]]) - (+b.dataset[p[0]]);
-      return d !== 0 ? d : (+a.dataset[p[1]]) - (+b.dataset[p[1]]);
-    }});
-    sorted.forEach(function (row) {{
-      var ok = (fa.length === 0 || fa.indexOf(row.dataset.area) >= 0) &&
-               (fc.length === 0 || fc.indexOf(row.dataset.concept) >= 0);
-      row.style.display = ok ? '' : 'none';
-      tbody.appendChild(row);   // reorder in place
-    }});
-  }}
-  setupMultiSelect(areaBox, apply);
-  setupMultiSelect(conceptBox, apply);
-  sortSel.addEventListener('change', apply);
-  apply();
-}})();
+{scripts}
 </script>
 </body>
 </html>
@@ -1061,6 +1149,10 @@ def main(argv: list[str] | None = None) -> int:
     add_lang_args(parser)
     parser.add_argument("--map", default=None)
     parser.add_argument("--out", default=None)
+    parser.add_argument(
+        "--export", action="store_true",
+        help="render a standalone shareable document (no review pins or app "
+             "coupling); a single self-contained HTML file")
     args = parser.parse_args(argv)
     rs = resolve(args)
     ws = workspace_dir(rs.config.repo_root)
@@ -1074,8 +1166,10 @@ def main(argv: list[str] | None = None) -> int:
     except FileNotFoundError:
         vocab = {"tags": [], "groups": []}
 
-    out_path = Path(args.out) if args.out else (ws / "meaning-map.html")
+    default_name = "meaning-map-export.html" if args.export else "meaning-map.html"
+    out_path = Path(args.out) if args.out else (ws / default_name)
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(render_html(mm, rs.ui_lang, vocab), encoding="utf-8")
+    out_path.write_text(
+        render_html(mm, rs.ui_lang, vocab, export=args.export), encoding="utf-8")
     print(rs.ui.t("render.done", path=str(out_path)))
     return 0

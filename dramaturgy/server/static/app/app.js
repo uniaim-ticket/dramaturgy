@@ -13,6 +13,7 @@ const I18N = {
     "init.running": "一括初期化を実行中…", "init.done": "一括初期化が完了しました",
     "job.running": "実行中…", "job.done": "完了", "job.error": "エラー", "job.idle": "応答待ち",
     "viewer.title": "意味地図プレビュー", "viewer.refresh": "更新",
+    "viewer.export": "資料を書き出す", "export.failed": "書き出しに失敗しました",
     "viewer.pin_hint": "各項目の + をクリックして指摘を追加します。",
     "viewer.hide_queue": "キューを隠す", "viewer.show_queue": "キューを表示",
     "rv.queue": "指摘キュー",
@@ -43,6 +44,7 @@ const I18N = {
     "init.running": "Initializing…", "init.done": "Initialization complete",
     "job.running": "running…", "job.done": "done", "job.error": "error", "job.idle": "awaiting response",
     "viewer.title": "Meaning map preview", "viewer.refresh": "Refresh",
+    "viewer.export": "Export document", "export.failed": "Export failed",
     "viewer.pin_hint": "Click + on any item to add a finding.",
     "viewer.hide_queue": "Hide queue", "viewer.show_queue": "Show queue",
     "rv.queue": "Finding queue",
@@ -476,6 +478,34 @@ function refreshView() {
   frame.src = apiUrl("/api/view") + "?_=" + Date.now() + (DEV_MODE ? "&dev=1" : "");
 }
 
+// Download a standalone, shareable HTML document (no review pins / app
+// coupling) — a single self-contained file. Fetched then saved client-side so
+// the browser downloads it rather than navigating to it.
+async function exportDocument() {
+  const btn = document.getElementById("export-doc");
+  btn.disabled = true;
+  try {
+    const resp = await fetch(apiUrl("/api/export"));
+    if (!resp.ok) throw new Error("export " + resp.status);
+    const html = await resp.text();
+    const name = (STATE && STATE.config && STATE.config.project
+      && STATE.config.project.name) || "meaning-map";
+    const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = name.replace(/[^\w.-]+/g, "_") + ".html";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  } catch (e) {
+    alert(t("export.failed"));
+  } finally {
+    btn.disabled = false;
+  }
+}
+
 function setQueueVisible(visible) {
   document.getElementById("queue").hidden = !visible;
   document.getElementById("toggle-queue").textContent =
@@ -507,6 +537,7 @@ function init() {
   document.getElementById("toggle-init-instr").onclick = toggleInitInstructions;
   document.getElementById("save-init-instr").onclick = saveInitInstructions;
   document.getElementById("refresh-view").onclick = refreshView;
+  document.getElementById("export-doc").onclick = exportDocument;
   document.getElementById("toggle-queue").onclick = toggleQueue;
   document.getElementById("save-config").onclick = saveConfig;
   document.getElementById("rv-add").onclick = () => submitFinding();

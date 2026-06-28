@@ -181,6 +181,14 @@ developer mode is on:
    context across findings or run each fresh. Findings persist in
    `.dramaturgy/reviews.json`.
 
+5. **Export a shareable document.** The **Export document** button above the
+   preview downloads a **single self-contained HTML file** (no external
+   assets) with the review `+` pins and app coupling stripped out — a clean
+   handout. It holds the same map; the developer-facing details (code refs,
+   APIs, screens, validation) can be shown/hidden with a toggle in the file's
+   top-right corner. The CLI produces the same file with
+   `dra render --export --out meaning-map.html`.
+
 ## Usage — inside Claude Code
 
 With this repo's `.claude/commands/` available, run in a Claude Code session

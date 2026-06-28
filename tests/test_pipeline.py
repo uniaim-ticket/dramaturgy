@@ -670,6 +670,65 @@ class ViewStatePersistenceTests(unittest.TestCase):
         self.assertIn("window.scrollTo", html)
 
 
+class ExportDocumentTests(unittest.TestCase):
+    """The export build is a standalone shareable document: same layout/data,
+    but no review pins or app coupling, and a single self-contained file."""
+
+    def _mm(self):
+        return {
+            "content_lang": "ja", "system": {"name": "S"},
+            "areas": [{"id": "a1", "name": "領域1", "one_liner": "x",
+                       "concept_crud": [{"concept_id": "c1", "ops": "CR"}],
+                       "related_area_ids": [], "child_area_ids": [],
+                       "apis": ["/api/x"], "code_refs": ["app/x.rb"]}],
+            "concepts": [{"id": "c1", "name": "概念1",
+                          "physical_tables": ["t"], "tags": [],
+                          "crud_by_area": [{"area_id": "a1", "ops": "CR"}]}],
+            "classifications": [], "components": [],
+            "actors": [{"id": "u", "name": "利用者", "category": "person"}],
+            "flows": [], "validations": ["v1"]}
+
+    def test_export_strips_review_and_app_coupling(self):
+        from dramaturgy.commands.render_html import render_html
+        html = render_html(self._mm(), "ja", export=True)
+        # No review pins, no pin/shell postMessage wiring, no app viewstate.
+        self.assertNotIn('class="rv-pin"', html)
+        self.assertNotIn("dramaturgy-review", html)
+        self.assertNotIn("dramaturgy-shell", html)
+        self.assertNotIn("dramaturgy.viewstate", html)
+        # Self-contained: inline CSS/JS, no external assets.
+        self.assertNotIn("<link", html)
+        self.assertNotIn("<script src", html)
+        # The content itself is preserved.
+        self.assertIn("領域1", html)
+        self.assertIn("概念1", html)
+
+    def test_export_has_self_contained_dev_toggle(self):
+        from dramaturgy.commands.render_html import render_html
+        html = render_html(self._mm(), "ja", export=True)
+        # Its own developer-details toggle (the shareable file has no app shell).
+        self.assertIn('id="dev-toggle"', html)
+        self.assertIn("dramaturgy.export.dev", html)
+        # Dev items still present but gated by the dev-only mechanism.
+        self.assertIn('class="dev-only"', html)
+        self.assertIn("body.dev .dev-only", html)
+
+    def test_export_keeps_interactive_crud_and_tag_filter(self):
+        from dramaturgy.commands.render_html import render_html
+        html = render_html(self._mm(), "ja", export=True)
+        # The shared interactive behaviour (CRUD sort/filter + combobox) stays.
+        self.assertIn("crud-tbody", html)
+        self.assertIn("setupMultiSelect", html)
+
+    def test_default_render_unaffected_and_no_mode_leak(self):
+        from dramaturgy.commands.render_html import render_html
+        # An export render must not leak its mode into a later normal render.
+        render_html(self._mm(), "ja", export=True)
+        html = render_html(self._mm(), "ja")
+        self.assertIn('class="rv-pin"', html)
+        self.assertNotIn('id="dev-toggle"', html)
+
+
 class SourceHintsRobustnessTests(unittest.TestCase):
     """source_hints may arrive as a dict (normal), a bare list/string, or be
     missing — Claude's output varies. match_files must tolerate all."""

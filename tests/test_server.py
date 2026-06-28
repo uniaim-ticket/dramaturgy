@@ -151,6 +151,11 @@ class ApiTests(unittest.TestCase):
             self.assertTrue(api.validate()[1]["ok"])
             self.assertEqual(200, api.render()[0])
             self.assertIn("販売", api.render_html_text())
+            # The export build holds the same content but drops the review pins.
+            exported = api.export_html_text()
+            self.assertIn("販売", exported)
+            self.assertNotIn('class="rv-pin"', exported)
+            self.assertIn('id="dev-toggle"', exported)
 
     def test_validate_reports_missing_code_ref(self):
         # Tables/APIs are no longer machine-checkable (Claude discovers them
@@ -507,6 +512,21 @@ class HttpTests(unittest.TestCase):
                 # Static client is served.
                 with urllib.request.urlopen(base + "/app/") as resp:
                     self.assertEqual(resp.status, 200)
+
+                # Export endpoint returns a standalone HTML document.
+                api = Api(d)
+                api.put_artifact("meaning-map.json", {
+                    "content_lang": "en", "system": {"name": "S"},
+                    "areas": [{"id": "a", "name": "Area A", "concept_crud": [],
+                               "related_area_ids": [], "child_area_ids": []}],
+                    "concepts": [], "classifications": [], "components": [],
+                    "actors": [], "flows": []})
+                with urllib.request.urlopen(base + "/api/export") as resp:
+                    self.assertEqual(resp.status, 200)
+                    self.assertIn("text/html", resp.headers["Content-Type"])
+                    doc = resp.read().decode("utf-8")
+                self.assertIn("Area A", doc)
+                self.assertNotIn('class="rv-pin"', doc)
             finally:
                 httpd.shutdown()
 

@@ -7,6 +7,7 @@
   "nav.classifications": "データの区分値",
   "nav.components": "構成（システム）",
   "nav.validation": "検証結果",
+  "dev.toggle": "開発者向け詳細",
   "actors.person": "業務上の登場人物",
   "actors.system": "アクター扱いのシステム",
   "classifications.hint": "システムで使われる「種類・区分」の一覧です（例: ポイント付与方法、メール種別など、選択肢として取りうる値の集合）。概念データそのものではありません。",

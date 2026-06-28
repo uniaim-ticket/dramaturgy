@@ -55,6 +55,7 @@ class Router:
         self._add("GET", "/api/validate", "h_validate")
         self._add("POST", "/api/render", "h_render")
         self._add("GET", "/api/view", "h_view_html")
+        self._add("GET", "/api/export", "h_export_html")
         self._add("GET", "/api/preflight", "h_preflight")
         self._add("POST", "/api/jobs/init", "h_job_init")
         self._add("POST", "/api/jobs/area-tree", "h_job_area_tree")
@@ -128,6 +129,12 @@ class Router:
 
     def h_view_html(self, params, body, query):
         html = self.api.render_html_text()
+        if html is None:
+            return 404, "<h1>meaning-map.json not found</h1>", "text/html; charset=utf-8"
+        return 200, html, "text/html; charset=utf-8"
+
+    def h_export_html(self, params, body, query):
+        html = self.api.export_html_text()
         if html is None:
             return 404, "<h1>meaning-map.json not found</h1>", "text/html; charset=utf-8"
         return 200, html, "text/html; charset=utf-8"

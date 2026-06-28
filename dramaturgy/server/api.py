@@ -247,6 +247,15 @@ class Api:
         return render_html(mm, self._config().ui_lang,
                            tags.load_vocab(self.repo_root))
 
+    def export_html_text(self) -> str | None:
+        """A standalone shareable document: the same map, rendered without the
+        review pins / app coupling, as a single self-contained HTML file."""
+        mm = self._read_optional("meaning-map.json")
+        if mm is None:
+            return None
+        return render_html(mm, self._config().ui_lang,
+                           tags.load_vocab(self.repo_root), export=True)
+
     # ---- Claude Code jobs ----------------------------------------------
     def preflight(self):
         ok, info = claude_runner.preflight(self.claude_bin)

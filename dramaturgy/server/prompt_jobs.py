@@ -49,6 +49,37 @@ def area_tree_prompt(repo_root: str, content_lang: str, project_name: str,
     return body + _instructions_block(extra_instructions) + footer
 
 
+def subdivide_review_prompt(repo_root: str, content_lang: str,
+                            extra_instructions: str | None = None) -> str:
+    """Ask Claude to split only the areas that warrant child areas, updating
+    area-tree.json. Feeds the current tree + per-area size hints."""
+    from ..common.area_match import match_files
+
+    ws = workspace_dir(repo_root)
+    area_tree = read_json(ws / "area-tree.json")
+    source_index = read_json(ws / "source-index.json")
+
+    hints = []
+    for area in area_tree.get("areas", []):
+        files = match_files(area, source_index)
+        lines = sum(f.get("lines") or 0 for f in files)
+        hints.append(f"- {area.get('id')} ({area.get('name')}): "
+                     f"{len(files)} files / {lines} lines")
+    size_hints = "\n".join(hints) or "(no size data)"
+
+    body = render_prompt(
+        "subdivide_review", content_lang,
+        area_tree=json.dumps(area_tree, ensure_ascii=False, indent=2),
+        size_hints=size_hints,
+    )
+    footer = render_prompt(
+        "writeback_area_tree", content_lang,
+        area_tree_path=str(ws / "area-tree.json"),
+        lang=content_lang,
+    )
+    return body + _instructions_block(extra_instructions) + footer
+
+
 def area_card_prompt(repo_root: str, content_lang: str, area_id: str,
                      extra_instructions: str | None = None) -> str:
     ws = workspace_dir(repo_root)

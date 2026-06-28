@@ -25,7 +25,9 @@ from . import claude_runner
 from . import reviews
 from . import tags
 from .jobs import JobRegistry
-from .prompt_jobs import area_card_prompt, area_tree_prompt, review_prompt
+from .prompt_jobs import (
+    area_card_prompt, area_tree_prompt, review_prompt, subdivide_review_prompt,
+)
 
 
 class Api:
@@ -319,7 +321,7 @@ class Api:
         job.set_status("running")
         try:
             # 1. analyze (mechanical)
-            job.append_progress("[1/6] analyze repository")
+            job.append_progress("[1/7] analyze repository")
             res = self.analyze({})[1]
             job.append_progress(
                 f"      files={res['files']} lines={res['lines']}")
@@ -327,7 +329,7 @@ class Api:
                 job.append_progress("      (applying saved init instructions)")
 
             # 2. area tree (Claude, with retry on transient errors)
-            job.append_progress("[2/6] generate area tree with Claude")
+            job.append_progress("[2/7] generate area tree with Claude")
             prompt = area_tree_prompt(
                 self.repo_root, cfg.content_lang, cfg.project_name,
                 extra_instructions=extra)
@@ -342,12 +344,34 @@ class Api:
             if not tree or not tree.get("areas"):
                 return self._fail(job, "area-tree.json missing or has no areas")
 
-            # 3. area cards (Claude). A card that fails (e.g. a transient API
-            # error that survives retries) is recorded and SKIPPED — the run
-            # continues so the user still gets a partial map and can
-            # regenerate the failed areas individually afterwards.
+            # 3. subdivide review (Claude) — split only the areas that warrant
+            # child areas, expanding area-tree.json. Best-effort: a failure
+            # here just leaves the flat tree (cards still run).
+            n_before = len(tree.get("areas", []))
+            job.append_progress("[3/7] review for sub-areas")
+            sub_prompt = subdivide_review_prompt(
+                self.repo_root, cfg.content_lang, extra_instructions=extra)
+            ok, err = claude_runner.stream_claude_with_retry(
+                job, sub_prompt, self.repo_root,
+                claude_bin=self.claude_bin, spawn=self.spawn,
+                resume_session=job.session_id)
+            if ok:
+                tree = self._read_optional("area-tree.json") or tree
+                n_after = len(tree.get("areas", []))
+                if n_after > n_before:
+                    job.append_progress(
+                        f"      split into {n_after - n_before} new sub-area(s)")
+                else:
+                    job.append_progress("      no sub-areas needed")
+            else:
+                job.append_progress(f"      ! subdivide skipped: {err}")
+
+            # 4. area cards (Claude) for every area in the (possibly expanded)
+            # tree. A card that fails (e.g. a transient API error that
+            # survives retries) is recorded and SKIPPED — the run continues so
+            # the user still gets a partial map and can regenerate later.
             areas = tree.get("areas", [])
-            job.append_progress(f"[3/6] generate {len(areas)} area cards")
+            job.append_progress(f"[4/7] generate {len(areas)} area cards")
             failed: list[str] = []
             for i, area in enumerate(areas, 1):
                 area_id = area.get("id")
@@ -377,19 +401,23 @@ class Api:
                     job, "no area cards were produced; "
                          f"all {len(areas)} areas failed: {failed}")
 
-            job.append_progress("[4/6] merge area cards")
+            job.append_progress("[5/7] merge area cards")
             code, merged = self.merge({})
             if code != 200:
                 return self._fail(job, f"merge: {merged.get('error')}")
+            # The area tree is authoritative for the hierarchy; overlay
+            # parent/child onto the merged map so subdivisions are reflected
+            # even if a card omitted them.
+            self._apply_tree_hierarchy(tree)
             job.append_progress(f"      merged areas={merged.get('areas')}")
-            job.append_progress("[5/6] validate")
+            job.append_progress("[6/7] validate")
             code, v = self.validate()
             if code != 200:
                 return self._fail(job, f"validate: {v.get('error')}")
             job.append_progress(
                 f"      ok={v['ok']} errors={len(v['errors'])} "
                 f"warnings={len(v['warnings'])}")
-            job.append_progress("[6/6] render HTML")
+            job.append_progress("[7/7] render HTML")
             self.render()
 
             if failed:
@@ -406,6 +434,26 @@ class Api:
             job.set_status("done")
         except (FileNotFoundError, KeyError, ValueError) as exc:
             self._fail(job, str(exc))
+
+    def _apply_tree_hierarchy(self, tree: dict) -> None:
+        """Copy the authoritative parent/child hierarchy from the area tree
+        onto meaning-map.json (cards may omit it). Areas not in the tree are
+        left untouched."""
+        mm = self._read_optional("meaning-map.json")
+        if mm is None:
+            return
+        tree_by_id = {a.get("id"): a for a in tree.get("areas", [])}
+        changed = False
+        for area in mm.get("areas", []):
+            t = tree_by_id.get(area.get("id"))
+            if not t:
+                continue
+            for field in ("parent_area_id", "child_area_ids"):
+                if field in t and area.get(field) != t[field]:
+                    area[field] = t[field]
+                    changed = True
+        if changed:
+            write_json(self.ws / "meaning-map.json", mm)
 
     @staticmethod
     def _fail(job, message: str) -> None:

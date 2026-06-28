@@ -250,6 +250,90 @@ class ClaudeJobTests(unittest.TestCase):
             self.assertTrue((ws / "meaning-map.html").exists())
             self.assertTrue(api.validate()[1]["ok"])
 
+    def test_init_pipeline_subdivides_oversized_area(self):
+        # The init pipeline has a subdivide review step: when an area warrants
+        # child areas, Claude splits it in area-tree.json, the tree expands,
+        # cards are generated for the new children, and the parent keeps its
+        # child_area_ids in the merged map (overlaid from the tree).
+        import re
+        with tempfile.TemporaryDirectory() as d:
+            _sample_repo(Path(d))
+            api = Api(d)
+            ws = api.ws
+
+            def spawn(argv):
+                prompt = argv[argv.index("-p") + 1]
+                m = re.search(r'([^\s`]+area-maps[^\s`]*\.json)', prompt)
+                if m:
+                    # Area-card prompt: write a card for that area. Detect this
+                    # first — the card prompt also mentions area-tree paths.
+                    aid = Path(m.group(1)).stem
+                    card = {"content_lang": "ja",
+                            "system": {"name": "S", "source_summary": {}},
+                            "actors": [], "concepts": [], "flows": [],
+                            "areas": [{"id": aid, "name": aid, "one_liner": "x",
+                                       "concept_crud": [], "related_area_ids": [],
+                                       "child_area_ids": [], "confidence": "high"}]}
+                    writes = [(Path(m.group(1)),
+                               json.dumps(card, ensure_ascii=False))]
+                elif "規模ヒント" in prompt:
+                    # Subdivide review: split sales into two children (once).
+                    tree = json.loads((ws / "area-tree.json").read_text("utf-8"))
+                    sales = next(a for a in tree["areas"] if a["id"] == "sales")
+                    if "child_area_ids" not in sales:
+                        sales["child_area_ids"] = ["sales.apply", "sales.payment"]
+                        tree["areas"] += [
+                            {"id": "sales.apply", "name": "申込",
+                             "parent_area_id": "sales",
+                             "source_hints": {"keywords": ["ticket"]}},
+                            {"id": "sales.payment", "name": "決済",
+                             "parent_area_id": "sales",
+                             "source_hints": {"keywords": ["ticket"]}}]
+                    writes = [(ws / "area-tree.json",
+                               json.dumps(tree, ensure_ascii=False))]
+                else:
+                    # Initial area-tree generation: one flat area.
+                    tree = {"content_lang": "ja", "system": {"name": "S"},
+                            "areas": [{"id": "sales", "name": "販売",
+                                       "source_hints": {"keywords": ["ticket"]},
+                                       "confidence": "high"}]}
+                    writes = [(ws / "area-tree.json",
+                               json.dumps(tree, ensure_ascii=False))]
+                lines = [
+                    json.dumps({"type": "system", "subtype": "init",
+                                "session_id": "s1"}),
+                    json.dumps({"type": "result", "is_error": False,
+                                "result": "ok", "session_id": "s1"}),
+                ]
+                return _FakeProc(lines, writes)
+
+            api.spawn = spawn
+            job_id = api.start_init_job({"force": True})[1]["job_id"]
+            for _ in range(500):
+                job = api.get_job(job_id)[1]
+                if job["status"] in ("done", "error", "aborted"):
+                    break
+                time.sleep(0.02)
+            self.assertEqual(job["status"], "done", job.get("error"))
+
+            # Tree expanded to parent + 2 children.
+            tree = json.loads((ws / "area-tree.json").read_text("utf-8"))
+            ids = {a["id"] for a in tree["areas"]}
+            self.assertEqual(ids, {"sales", "sales.apply", "sales.payment"})
+
+            # Cards generated for every area, including the new children.
+            for aid in ("sales", "sales.apply", "sales.payment"):
+                self.assertTrue((ws / "area-maps" / f"{aid}.json").exists(), aid)
+
+            # Merged map: parent carries the hierarchy (overlaid from the tree),
+            # children point back at the parent, and validation passes.
+            mm = json.loads((ws / "meaning-map.json").read_text("utf-8"))
+            by_id = {a["id"]: a for a in mm["areas"]}
+            self.assertEqual(sorted(by_id["sales"]["child_area_ids"]),
+                             ["sales.apply", "sales.payment"])
+            self.assertEqual(by_id["sales.apply"]["parent_area_id"], "sales")
+            self.assertTrue(api.validate()[1]["ok"])
+
     def test_runner_reports_nonzero_exit(self):
         job = Job(id="j", kind="area_card", prompt="p")
 

@@ -116,11 +116,16 @@ dra serve --repo-root /path/to/target      # opens http://127.0.0.1:5178/app/
 The UI is a **map preview + a review queue**. The flow is:
 
 1. **Initialize all with Claude** (button in the header) — runs the whole
-   pipeline as one job (analyze → area tree → area cards → merge → validate →
-   render) and reports progress live (elapsed time, the Claude process id, and
-   its CPU/memory, so you can see the session is alive). Transient Claude API
-   errors are retried; an area that still fails is skipped and reported so the
-   run finishes with a partial map you can complete later.
+   pipeline as one job (analyze → area tree → subdivide review → area cards →
+   merge → validate → render) and reports progress live (elapsed time, the
+   Claude process id, and its CPU/memory, so you can see the session is alive).
+   Transient Claude API errors are retried; an area that still fails is skipped
+   and reported so the run finishes with a partial map you can complete later.
+   In the **subdivide review** step, if the initial tree has an area that is
+   too large or mixes unrelated responsibilities, Claude splits just that area
+   into natural child areas (the parent area stays, gaining `child_area_ids`);
+   areas that don't need it are left alone. Cards are then generated against the
+   subdivided tree, so the new child areas get cards too.
 
    The **Instructions** button opens a box for extra guidance to Claude during
    generation (e.g. "tag concepts as master vs. transaction"). It is saved per

@@ -29,9 +29,7 @@ CSS = """
 * { box-sizing: border-box; }
 body { font-family: system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP",
   sans-serif; margin: 0; color: #1c1f23; background: #f6f7f9; line-height: 1.6; }
-header { background: #1c2733; color: #fff; padding: 16px 24px; }
-header h1 { margin: 0; font-size: 20px; }
-header .meta { font-size: 12px; opacity: .8; margin-top: 4px; }
+.tiny { font-size: 12px; }
 nav { position: sticky; top: 0; background: #243140; padding: 8px 24px;
   display: flex; gap: 16px; flex-wrap: wrap; z-index: 10; }
 nav a { color: #cfe0f0; text-decoration: none; font-size: 13px; }
@@ -48,8 +46,9 @@ section, details.box, .box[id], [id^="actor-"],
 /* Area boxes: grid of clickable cards that expand in place. */
 .box-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   gap: 12px; }
-details.box { border: 1px solid #d4dae0; border-radius: 8px; background: #fbfcfd;
-  overflow: hidden; }
+/* No overflow:hidden — it would become the scroll context and break the
+   sticky lane header inside an expanded area's swimlane. */
+details.box { border: 1px solid #d4dae0; border-radius: 8px; background: #fbfcfd; }
 details.box[open] { grid-column: 1 / -1; background: #fff; border-color: #9db4cc; }
 details.box > summary { list-style: none; cursor: pointer; padding: 14px 16px;
   font-weight: 600; display: flex; align-items: baseline; justify-content: space-between; }
@@ -708,8 +707,8 @@ def render_html(mm: dict, ui_lang: str, vocab: dict | None = None) -> str:
 
     lang_note = ""
     if content_lang != ui_lang:
-        lang_note = (f'<div class="meta">'
-                     f'{e(cat.t("note.content_lang", content_lang=content_lang))}</div>')
+        lang_note = (f'<p class="muted tiny">'
+                     f'{e(cat.t("note.content_lang", content_lang=content_lang))}</p>')
 
     nav_items = [
         ("actors", "nav.actors"), ("areas", "nav.areas"),
@@ -752,12 +751,8 @@ def render_html(mm: dict, ui_lang: str, vocab: dict | None = None) -> str:
 <style>{CSS}</style>
 </head>
 <body>
-<header><h1>{e(cat.t("title"))} — {e(system.get("name"))}</h1>
-<div class="meta">{e(system.get("summary"))}</div>
-<div class="meta">{e(cat.t("footer.generated_at", generated_at=system.get("generated_at","")))}</div>
-{lang_note}</header>
 <nav>{nav}</nav>
-<main>{"".join(sections)}</main>
+<main>{lang_note}{"".join(sections)}</main>
 <script>
 // Inline review: clicking a + pin tells the parent app to open the finding
 // popover for that item. No-op when opened standalone (no parent listener).

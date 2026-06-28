@@ -23,6 +23,8 @@
   "label.concept_table": "概念データ",
   "label.physical_tables": "物理テーブル",
   "label.tags_col": "タグ",
+  "tags.legend": "タグの意味（凡例）",
+  "tags.ungrouped": "未分類",
   "concepts.filter": "タグで絞り込み:",
   "concepts.filter_all": "すべて",
   "label.flows": "主要フロー",

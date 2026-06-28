@@ -60,12 +60,25 @@ def area_card_prompt(repo_root: str, content_lang: str, area_id: str,
     pack = build_pack(area, source_index)
 
     # System-specific tag vocabulary (optional) to guide concept tagging.
+    # Tags carry a meaning (description) and may belong to a group.
     from . import tags as _tags
-    vocab = _tags.load_vocab(repo_root)["tags"]
-    if vocab:
-        vocab_text = "\n".join(
-            f"- {v['name']}" + (f": {v['description']}" if v.get("description") else "")
-            for v in vocab)
+    vdata = _tags.load_vocab(repo_root)
+    vtags = vdata["tags"]
+    if vtags:
+        lines = []
+        for v in vtags:
+            line = f"- {v['name']}"
+            if v.get("group"):
+                line += f" [group: {v['group']}]"
+            if v.get("description"):
+                line += f": {v['description']}"
+            lines.append(line)
+        vocab_text = "\n".join(lines)
+        if vdata.get("groups"):
+            gl = "\n".join(
+                f"- {g['name']}" + (f": {g['description']}" if g.get("description") else "")
+                for g in vdata["groups"])
+            vocab_text = f"Groups:\n{gl}\n\nTags:\n{vocab_text}"
     else:
         vocab_text = "(none defined yet — infer system-specific tags such as "
         vocab_text += "master vs. transaction where useful)"

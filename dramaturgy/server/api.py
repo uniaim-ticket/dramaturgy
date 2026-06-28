@@ -232,7 +232,8 @@ class Api:
         mm = self._read_optional("meaning-map.json")
         if mm is None:
             return 404, {"error": "meaning-map.json not found"}
-        html = render_html(mm, self._config().ui_lang)
+        html = render_html(mm, self._config().ui_lang,
+                           tags.load_vocab(self.repo_root))
         out = self.ws / "meaning-map.html"
         out.write_text(html, encoding="utf-8")
         return 200, {"ok": True, "path": str(out)}
@@ -241,7 +242,8 @@ class Api:
         mm = self._read_optional("meaning-map.json")
         if mm is None:
             return None
-        return render_html(mm, self._config().ui_lang)
+        return render_html(mm, self._config().ui_lang,
+                           tags.load_vocab(self.repo_root))
 
     # ---- Claude Code jobs ----------------------------------------------
     def preflight(self):

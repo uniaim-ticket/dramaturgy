@@ -72,6 +72,19 @@ td { overflow-wrap: anywhere; }
 .tag.tagchip { background: #efe7fb; color: #5b3aa6; }
 .tag.val { background: #eef3f7; }
 
+/* Tag legend (groups + tag meanings) */
+.tag-legend { margin: 8px 0 12px; border: 1px solid #e2e6ea; border-radius: 8px;
+  background: #fbfbfd; }
+.tag-legend > summary { cursor: pointer; padding: 8px 12px; font-size: 13px;
+  font-weight: 600; color: #41506a; }
+.tg-grid { display: grid; grid-template-columns: repeat(auto-fill,minmax(240px,1fr));
+  gap: 12px; padding: 8px 12px 12px; }
+.tg-block { border: 1px solid #eef1f4; border-radius: 6px; padding: 8px 10px;
+  background: #fff; }
+.tg-name { font-weight: 600; font-size: 13px; color: #41506a; }
+.tg-tags { list-style: none; margin: 6px 0 0; padding: 0; }
+.tg-tags li { margin: 3px 0; font-size: 12px; }
+
 /* Overview business flow (swimlane) */
 .overview-flow { margin: 12px 0 16px; }
 .overview-flow h4 { margin: 0 0 8px; font-size: 13px; color: #41506a; }
@@ -359,20 +372,63 @@ def render_areas(cat: Catalog, areas: list, concepts: dict,
             f'<div class="box-grid">{boxes}</div>')
 
 
-def tag_chips(tag_list, *, clickable: bool = False) -> str:
+def tag_chips(tag_list, *, clickable: bool = False, vocab: dict | None = None) -> str:
     if not tag_list:
         return '<span class="muted">—</span>'
+    vocab = vocab or {}
     out = []
     for tg in tag_list:
         attr = f' data-tag="{e(tg)}"' if clickable else ""
+        # Tooltip = the tag's defined meaning (when present in the vocabulary).
+        meta = vocab.get(tg) or {}
+        desc = meta.get("description") or ""
+        title = f' title="{e(desc)}"' if desc else ""
         cls = "tag tagchip" + (" filter" if clickable else "")
-        out.append(f'<span class="{cls}"{attr}>{e(tg)}</span>')
+        out.append(f'<span class="{cls}"{attr}{title}>{e(tg)}</span>')
     return "".join(out)
 
 
-def render_concept_tables(cat: Catalog, concepts: list, areas: dict) -> str:
+def render_tag_legend(cat: Catalog, vocab: dict) -> str:
+    """A legend of the tag vocabulary: groups, their tags, and each tag's
+    meaning. Helps a reader understand what the tags mean."""
+    tags_v = vocab.get("tags") or []
+    if not tags_v:
+        return ""
+    groups = vocab.get("groups") or []
+    gdesc = {g["name"]: g.get("description", "") for g in groups}
+    # Bucket tags by group (preserve group order, then ungrouped last).
+    order = [g["name"] for g in groups]
+    buckets: dict = {}
+    for t in tags_v:
+        buckets.setdefault(t.get("group") or "", []).append(t)
+    ordered_keys = [g for g in order if g in buckets] + \
+        [k for k in buckets if k and k not in order] + \
+        ([""] if "" in buckets else [])
+
+    blocks = ""
+    for g in ordered_keys:
+        items = "".join(
+            f'<li><span class="tag tagchip">{e(t["name"])}</span> '
+            f'<span class="muted">{e(t.get("description"))}</span></li>'
+            for t in buckets[g])
+        if g:
+            head = (f'<div class="tg-name">{e(g)}</div>'
+                    + (f'<div class="muted tiny">{e(gdesc.get(g, ""))}</div>'
+                       if gdesc.get(g) else ""))
+        else:
+            head = f'<div class="tg-name muted">{e(cat.t("tags.ungrouped"))}</div>'
+        blocks += f'<div class="tg-block">{head}<ul class="tg-tags">{items}</ul></div>'
+    return (f'<details class="tag-legend"><summary>{e(cat.t("tags.legend"))}</summary>'
+            f'<div class="tg-grid">{blocks}</div></details>')
+
+
+def render_concept_tables(cat: Catalog, concepts: list, areas: dict,
+                          vocab: dict | None = None) -> str:
     if not concepts:
         return f'<p class="muted">{e(cat.t("empty.none"))}</p>'
+
+    vocab = vocab or {"tags": [], "groups": []}
+    vocab_map = {t["name"]: t for t in vocab.get("tags", [])}
 
     # System-specific tag vocabulary present across the concepts → filter bar.
     all_tags = sorted({tg for c in concepts for tg in (c.get("tags") or [])})
@@ -392,7 +448,7 @@ def render_concept_tables(cat: Catalog, concepts: list, areas: dict) -> str:
             f'<td class="brk"><b>{e(cname)}</b>{cpin("", cname)}<br>'
             f"<span class='muted'>{e(c.get('description'))}"
             f"{cpin('description', cat.t('label.concepts'))}</span></td>"
-            f'<td class="brk">{tag_chips(ctags)}'
+            f'<td class="brk">{tag_chips(ctags, vocab=vocab_map)}'
             f"{cpin('tags', cat.t('label.tags_col'))}</td>"
             f'<td class="brk">{tags(c.get("physical_tables"), "phys")}'
             f"{cpin('physical_tables', cat.t('label.physical_tables'))}</td>"
@@ -407,11 +463,13 @@ def render_concept_tables(cat: Catalog, concepts: list, areas: dict) -> str:
             f'<span class="muted tiny">{e(cat.t("concepts.filter"))}</span>'
             f'<span class="tag tagchip filter active" data-tag="*">'
             f'{e(cat.t("concepts.filter_all"))}</span>'
-            f'{tag_chips(all_tags, clickable=True)}</div>')
+            f'{tag_chips(all_tags, clickable=True, vocab=vocab_map)}</div>')
+
+    legend = render_tag_legend(cat, vocab)
 
     return (
         f'<p class="muted">{e(cat.t("concepts.hint"))}</p>'
-        f'{filter_bar}'
+        f'{legend}{filter_bar}'
         f"<table><tr><th>{e(cat.t('label.concept_table'))}</th>"
         f"<th>{e(cat.t('label.tags_col'))}</th>"
         f"<th>{e(cat.t('label.physical_tables'))}</th>"
@@ -611,10 +669,11 @@ def render_validation(cat: Catalog, mm: dict) -> str:
     return "".join(blocks) or f'<p class="muted">{e(cat.t("empty.none"))}</p>'
 
 
-def render_html(mm: dict, ui_lang: str) -> str:
+def render_html(mm: dict, ui_lang: str, vocab: dict | None = None) -> str:
     content_lang = mm.get("content_lang") or ui_lang
     cat = Catalog(ui_lang, domain="html")
     system = mm.get("system", {})
+    vocab = vocab or {"tags": [], "groups": []}
 
     lang_note = ""
     if content_lang != ui_lang:
@@ -642,7 +701,7 @@ def render_html(mm: dict, ui_lang: str) -> str:
         f'<section id="areas"><h2>{e(cat.t("nav.areas"))}</h2>'
         f'{render_areas(cat, areas, concept_map, actor_map)}</section>',
         f'<section id="concepts"><h2>{e(cat.t("nav.concepts"))}</h2>'
-        f'{render_concept_tables(cat, concepts, area_map)}</section>',
+        f'{render_concept_tables(cat, concepts, area_map, vocab)}</section>',
         f'<section id="classifications"><h2>{e(cat.t("nav.classifications"))}</h2>'
         f'{render_classifications(cat, mm.get("classifications", []), concept_map)}</section>',
         f'<section id="crud"><h2>{e(cat.t("nav.crud"))}</h2>'
@@ -719,8 +778,13 @@ def main(argv: list[str] | None = None) -> int:
     content_lang = mm.get("content_lang") or rs.content_lang
     print(rs.ui.t("render.start", ui_lang=rs.ui_lang, content_lang=content_lang))
 
+    try:
+        vocab = read_json(ws / "tags.json")
+    except FileNotFoundError:
+        vocab = {"tags": [], "groups": []}
+
     out_path = Path(args.out) if args.out else (ws / "meaning-map.html")
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(render_html(mm, rs.ui_lang), encoding="utf-8")
+    out_path.write_text(render_html(mm, rs.ui_lang, vocab), encoding="utf-8")
     print(rs.ui.t("render.done", path=str(out_path)))
     return 0

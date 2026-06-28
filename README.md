@@ -133,7 +133,10 @@ The UI is a **map preview + a review queue**. The flow is:
      areas that use them. Concepts carry **system-specific tags** (e.g. master
      vs. transaction) — filter by tag, and edit tags directly (the **+** on the
      tags cell; no Claude). The tag vocabulary is per-project
-     (`.dramaturgy/tags.json`) and is offered to Claude when generating cards.
+     (`.dramaturgy/tags.json`): each tag has a **meaning** (shown as a tooltip
+     and in a legend) and may belong to a **group**; the legend lists tags by
+     group. The vocabulary (with groups + meanings) is offered to Claude when
+     generating cards. Edit it via *manage vocabulary* in the tag editor.
    - **Classifications** — sets of allowed values (e.g. point-grant method,
      mail kind), kept *out* of concept data. Each is either a detail of a
      concept or a standalone business-rule premise.

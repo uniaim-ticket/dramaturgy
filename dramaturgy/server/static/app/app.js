@@ -30,7 +30,7 @@ const I18N = {
     "saved": "保存しました", "save_failed": "保存に失敗",
     "tag.help": "この概念データのタグを編集します。語彙タグをクリックで切替、または自由入力（カンマ/空白区切り）。",
     "tag.save": "タグを保存", "tag.manage": "語彙を管理",
-    "tag.manage_prompt": "タグ語彙を1行1タグで編集（「名前: 説明」も可）:",
+    "tag.manage_prompt": "タグ語彙を編集（1行1タグ。「名前 | グループ | 説明」、グループ・説明は省略可）:",
   },
   en: {
     "btn.save_config": "Save",
@@ -59,7 +59,7 @@ const I18N = {
     "saved": "Saved", "save_failed": "Save failed",
     "tag.help": "Edit this concept's tags. Click a vocabulary tag to toggle it, or type your own (comma/space separated).",
     "tag.save": "Save tags", "tag.manage": "manage vocabulary",
-    "tag.manage_prompt": "Edit the tag vocabulary, one tag per line (\"name: description\" allowed):",
+    "tag.manage_prompt": "Edit the tag vocabulary, one per line: \"name | group | description\" (group/description optional):",
   },
 };
 
@@ -420,17 +420,25 @@ async function saveTags() {
 
 async function manageVocab() {
   const { data } = await api("GET", "/api/tags");
+  // One tag per line: "name | group | description" (group/description optional).
   const text = (data.tags || [])
-    .map((t) => (t.description ? `${t.name}: ${t.description}` : t.name)).join("\n");
+    .map((t) => [t.name, t.group || "", t.description || ""].join(" | ").replace(/( \| )+$/, ""))
+    .join("\n");
   const edited = prompt(t("tag.manage_prompt"), text);
   if (edited === null) return;
+  const groupSet = {};
   const tags = edited.split("\n").map((line) => {
-    const idx = line.indexOf(":");
-    return idx >= 0
-      ? { name: line.slice(0, idx).trim(), description: line.slice(idx + 1).trim() }
-      : { name: line.trim(), description: "" };
-  }).filter((t) => t.name);
-  await api("PUT", "/api/tags", { tags });
+    const [name, group, ...rest] = line.split("|").map((s) => s.trim());
+    if (!name) return null;
+    if (group) groupSet[group] = true;
+    return { name, group: group || "", description: rest.join("|").trim() };
+  }).filter(Boolean);
+  // Preserve existing group descriptions; add any newly-referenced groups.
+  const existingGroups = {};
+  (data.groups || []).forEach((g) => (existingGroups[g.name] = g.description || ""));
+  const groups = Object.keys(groupSet).map(
+    (name) => ({ name, description: existingGroups[name] || "" }));
+  await api("PUT", "/api/tags", { groups, tags });
   if (TAG_TARGET) openTagEditor(TAG_TARGET, document.getElementById("tag-target").textContent);
 }
 

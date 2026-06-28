@@ -23,6 +23,8 @@
   "label.concept_table": "Concept data",
   "label.physical_tables": "Physical tables",
   "label.tags_col": "Tags",
+  "tags.legend": "Tag meanings (legend)",
+  "tags.ungrouped": "Ungrouped",
   "concepts.filter": "Filter by tag:",
   "concepts.filter_all": "All",
   "label.flows": "Key flows",

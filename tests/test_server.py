@@ -597,12 +597,29 @@ class TagTests(unittest.TestCase):
     def test_vocab_roundtrip_dedup(self):
         with tempfile.TemporaryDirectory() as d:
             api = self._api_with_concept(d)
-            self.assertEqual(api.get_tags()[1], {"tags": []})
+            self.assertEqual(api.get_tags()[1], {"tags": [], "groups": []})
             saved = api.put_tags({"tags": [
                 {"name": "master", "description": "マスタ"},
                 {"name": "transaction"}, "master", "  "]})[1]
             names = [t["name"] for t in saved["tags"]]
             self.assertEqual(names, ["master", "transaction"])
+            # Each tag carries name/description/group.
+            self.assertEqual(saved["tags"][0],
+                             {"name": "master", "description": "マスタ", "group": ""})
+
+    def test_groups_with_meaning(self):
+        with tempfile.TemporaryDirectory() as d:
+            api = self._api_with_concept(d)
+            saved = api.put_tags({
+                "groups": [{"name": "データ区分", "description": "マスタ/Tx"},
+                           "データ区分"],  # deduped
+                "tags": [{"name": "master", "description": "マスタ",
+                          "group": "データ区分"}]})[1]
+            self.assertEqual(saved["groups"],
+                             [{"name": "データ区分", "description": "マスタ/Tx"}])
+            self.assertEqual(saved["tags"][0]["group"], "データ区分")
+            from dramaturgy.server import tags as _t
+            self.assertEqual(_t.group_of(d)["master"], "データ区分")
 
     def test_patch_concept_tags_normalized_and_persisted(self):
         with tempfile.TemporaryDirectory() as d:

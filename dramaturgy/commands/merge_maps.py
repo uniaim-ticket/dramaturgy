@@ -189,6 +189,14 @@ def main(argv: list[str] | None = None) -> int:
     print(rs.ui.t("merge.start"))
     maps = [read_json(p) for p in args.inputs]
     merged, _ = merge(maps, rs.ui)
+    # Carry the analyzed repo's provenance (license/public flag, remote, commit)
+    # from the source index onto the merged map when available.
+    try:
+        meta = read_json(ws / "source-index.json").get("source_meta")
+    except FileNotFoundError:
+        meta = None
+    if meta:
+        merged.setdefault("system", {})["source"] = meta
     out = args.out or str(ws / "meaning-map.json")
     write_json(out, merged)
     print(rs.ui.t("merge.merged", count=len(merged["areas"])))

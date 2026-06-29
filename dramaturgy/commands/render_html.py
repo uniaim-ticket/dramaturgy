@@ -56,6 +56,13 @@ section > h2 { margin-top: 0; border-bottom: 2px solid #eef1f4; padding-bottom: 
 .sys-purpose .sp-name { font-weight: 600; font-size: 16px; margin: 0 0 8px; }
 .sys-purpose p { margin: 0 0 8px; }
 #purpose { background: #f7faff; border-color: #cdddf0; }
+/* Provenance note (public sources): repo link + analyzed commit. */
+.source-note { font-size: 13px; color: #5a6573; background: #f3f6fa;
+  border: 1px solid #e2e6ea; border-radius: 8px; padding: 10px 14px;
+  margin-bottom: 16px; overflow-wrap: anywhere; }
+.source-note .src-label { font-weight: 600; color: #41506a; margin-right: 4px; }
+.source-note a { color: #2563eb; text-decoration: none; }
+.source-note a:hover { text-decoration: underline; }
 /* Anchored items must clear the sticky nav when scrolled to. */
 section, details.box, .box[id], [id^="actor-"],
 [id^="concept-"], [id^="classification-"], [id^="component-"] {
@@ -844,6 +851,37 @@ def render_components(cat: Catalog, components: list) -> str:
         f"<th>{e(cat.t('label.code_refs'))}</th></tr>{rows}</table>")
 
 
+def render_source_note(cat: Catalog, system: dict) -> str:
+    """A provenance note at the very top: a link to the analyzed repository and
+    the commit analyzed. Only emitted for public sources (a license file was
+    present at analysis time); private sources show nothing."""
+    src = system.get("source") or {}
+    if not src.get("public"):
+        return ""
+    url = src.get("repo_url")
+    commit = src.get("commit")
+    short = src.get("commit_short") or (commit[:12] if commit else "")
+    bits = []
+    if url:
+        # When we have a remote and a commit, link straight to that revision.
+        target = f"{url}/tree/{commit}" if commit else url
+        bits.append(f'<a href="{e(target)}" target="_blank" '
+                    f'rel="noopener noreferrer">{e(url)}</a>')
+    if short:
+        label = cat.t("source.commit")
+        if commit and url:
+            href = f"{url}/commit/{commit}"
+            bits.append(f'{e(label)}: <a href="{e(href)}" target="_blank" '
+                        f'rel="noopener noreferrer"><code>{e(short)}</code></a>')
+        else:
+            bits.append(f'{e(label)}: <code>{e(short)}</code>')
+    if not bits:
+        return ""
+    body = " · ".join(bits)
+    return (f'<div class="source-note"><span class="src-label">'
+            f'{e(cat.t("source.note"))}</span> {body}</div>')
+
+
 def render_system_purpose(cat: Catalog, system: dict) -> str:
     """The system's overall purpose — a short orienting paragraph shown at the
     very top, before the actors. Preserves author line breaks as paragraphs.
@@ -1097,7 +1135,9 @@ def _render_html_body(mm, ui_lang, vocab, cat, content_lang, system,
         lang_note = (f'<p class="muted tiny">'
                      f'{e(cat.t("note.content_lang", content_lang=content_lang))}</p>')
 
-    # The system's overall purpose leads the document when present.
+    # Provenance note (public sources only) and the overall purpose lead the
+    # document, in that order, above the sections.
+    source_note = render_source_note(cat, system)
     purpose_html = render_system_purpose(cat, system)
 
     # (anchor, label key, dev_only). The validation view is developer-facing.
@@ -1168,7 +1208,7 @@ def _render_html_body(mm, ui_lang, vocab, cat, content_lang, system,
 </head>
 <body>
 <nav>{nav}</nav>
-<main>{lang_note}{"".join(sections)}</main>
+<main>{source_note}{lang_note}{"".join(sections)}</main>
 <script>
 {scripts}
 </script>

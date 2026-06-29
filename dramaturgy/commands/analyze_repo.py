@@ -21,11 +21,67 @@ Output: ``.dramaturgy/source-index.json``.
 from __future__ import annotations
 
 import argparse
+import subprocess
 from collections import defaultdict
 from pathlib import Path, PurePosixPath
 
 from ..common.config import add_lang_args, resolve
 from ..common.paths import write_json, workspace_dir
+
+# A repository is treated as public (and thus safe to link to with its commit)
+# only when it carries a license file at its root.
+LICENSE_NAMES = {
+    "license", "license.md", "license.txt", "license.rst",
+    "copying", "copying.md", "copying.txt", "unlicense",
+}
+
+
+def _git(root: Path, *args: str) -> str | None:
+    """Run a git command in ``root``; return stripped stdout or None on any
+    failure (not a git repo, git missing, command errored)."""
+    try:
+        out = subprocess.run(
+            ["git", "-C", str(root), *args],
+            capture_output=True, text=True, timeout=10)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if out.returncode != 0:
+        return None
+    return out.stdout.strip() or None
+
+
+def _normalize_remote(url: str | None) -> str | None:
+    """Best-effort normalize a git remote to a browsable https URL.
+    ``git@github.com:owner/repo.git`` -> ``https://github.com/owner/repo``."""
+    if not url:
+        return None
+    url = url.strip()
+    if url.startswith("git@") and ":" in url:
+        host, path = url[len("git@"):].split(":", 1)
+        url = f"https://{host}/{path}"
+    elif url.startswith("ssh://git@"):
+        url = "https://" + url[len("ssh://git@"):]
+    if url.endswith(".git"):
+        url = url[: -len(".git")]
+    return url
+
+
+def _source_meta(root: Path) -> dict:
+    """Mechanical, reliably-knowable facts about the analyzed repository: its
+    license presence (treated as the public/private signal), git remote, and
+    the commit analyzed. No semantic inference."""
+    has_license = any(
+        child.is_file() and child.name.lower() in LICENSE_NAMES
+        for child in root.iterdir())
+    meta: dict = {"public": has_license}
+    remote = _normalize_remote(_git(root, "config", "--get", "remote.origin.url"))
+    if remote:
+        meta["repo_url"] = remote
+    commit = _git(root, "rev-parse", "HEAD")
+    if commit:
+        meta["commit"] = commit
+        meta["commit_short"] = commit[:12]
+    return meta
 
 # Directories that never carry domain meaning (skip wholesale).
 SKIP_DIRS = {
@@ -91,6 +147,7 @@ def analyze_repo(repo_root: str) -> dict:
 
     return {
         "repo_root": str(root),
+        "source_meta": _source_meta(root),
         "summary": {
             "files": len(files),
             "lines": total_lines,

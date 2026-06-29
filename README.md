@@ -143,6 +143,9 @@ developer mode is on:
    repository (`.dramaturgy/init-instructions.txt`, separate from the result)
    and reused on every initialization — you don't retype it each run.
 2. **Read the preview** on the left. It shows, in order:
+   - **Source note**: for public sources only (a LICENSE file is present at the
+     repo root), a top-of-page note linking to the analyzed repository and the
+     commit analyzed (nothing is shown for private sources or when unknown).
    - **System purpose**: a concise overall purpose / overview of the system
      (≤1000 chars) at the very top (omitted until generated).
    - **Actors**, grouped into *business actors (people)* and *systems treated

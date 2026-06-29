@@ -117,6 +117,26 @@ class ApiTests(unittest.TestCase):
             self.assertEqual(200, api.put_artifact("area-tree.json", tree)[0])
             self.assertEqual("ja", api.get_artifact("area-tree.json")[1]["content_lang"])
 
+    def test_merge_attaches_source_provenance(self):
+        with tempfile.TemporaryDirectory() as d:
+            _sample_repo(Path(d))
+            api = Api(d)
+            # A source index carrying provenance (as analyze would produce).
+            api.put_artifact("source-index.json", {
+                "files": [], "source_meta": {
+                    "public": True, "repo_url": "https://github.com/o/r",
+                    "commit": "abc123", "commit_short": "abc123"}})
+            api.put_artifact("area-maps/sales.json", {
+                "content_lang": "ja", "system": {"name": "S"},
+                "actors": [], "concepts": [], "flows": [],
+                "areas": [{"id": "sales", "name": "販売", "concept_crud": [],
+                           "related_area_ids": [], "child_area_ids": []}]})
+            self.assertEqual(200, api.merge({})[0])
+            mm = api.get_artifact("meaning-map.json")[1]
+            self.assertEqual(mm["system"]["source"]["repo_url"],
+                             "https://github.com/o/r")
+            self.assertTrue(mm["system"]["source"]["public"])
+
     def test_patch_area_writes_back(self):
         with tempfile.TemporaryDirectory() as d:
             api = Api(d)

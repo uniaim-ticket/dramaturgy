@@ -215,6 +215,13 @@ class Api:
             return 400, {"error": "no area-maps to merge"}
         ui = Catalog(self._config().ui_lang, domain="cli")
         merged, _ = merge_maps([read_json(p) for p in paths], ui)
+        # Attach mechanically-known facts about the analyzed repo (public flag
+        # via LICENSE presence, remote URL, analyzed commit) so the HTML can
+        # show a provenance note for public sources.
+        source_index = self._read_optional("source-index.json") or {}
+        meta = source_index.get("source_meta")
+        if meta:
+            merged.setdefault("system", {})["source"] = meta
         write_json(self.ws / "meaning-map.json", merged)
         return 200, {"areas": len(merged.get("areas", [])),
                      "report": merged.get("merge_report", {})}

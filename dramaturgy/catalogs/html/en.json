@@ -8,6 +8,8 @@
   "nav.components": "Components (systems)",
   "nav.validation": "Validation",
   "nav.purpose": "System purpose",
+  "source.note": "Analyzed repository:",
+  "source.commit": "Commit analyzed",
   "dev.toggle": "Developer details",
   "actors.person": "Business actors (people)",
   "actors.system": "Systems treated as actors",

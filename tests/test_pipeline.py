@@ -604,6 +604,60 @@ class OverviewFlowTests(unittest.TestCase):
         self.assertIn('href="#area-admin-operation"', card)
 
 
+class SourceProvenanceTests(unittest.TestCase):
+    """A provenance note (repo link + analyzed commit) is shown only for
+    public sources, where public is decided by a LICENSE file at analysis."""
+
+    def _mm(self, source):
+        return {"content_lang": "ja", "system": {"name": "S", "source": source},
+                "areas": [], "concepts": [], "classifications": [],
+                "components": [], "actors": [], "flows": []}
+
+    def test_normalize_remote(self):
+        from dramaturgy.commands.analyze_repo import _normalize_remote
+        self.assertEqual(_normalize_remote("git@github.com:o/r.git"),
+                         "https://github.com/o/r")
+        self.assertEqual(_normalize_remote("https://github.com/o/r.git"),
+                         "https://github.com/o/r")
+        self.assertEqual(_normalize_remote("ssh://git@gitlab.com/o/r.git"),
+                         "https://gitlab.com/o/r")
+        self.assertIsNone(_normalize_remote(None))
+
+    def test_license_decides_public(self):
+        from dramaturgy.commands.analyze_repo import _source_meta
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            self.assertFalse(_source_meta(root)["public"])
+            (root / "LICENSE").write_text("MIT", encoding="utf-8")
+            self.assertTrue(_source_meta(root)["public"])
+
+    def test_note_shown_for_public_with_links(self):
+        from dramaturgy.commands.render_html import render_html
+        html = render_html(self._mm({
+            "public": True, "repo_url": "https://github.com/o/r",
+            "commit": "abc123def4567", "commit_short": "abc123def456"}), "ja")
+        note = html[html.index("<main>"):html.index("</main>")]
+        self.assertIn('class="source-note"', note)
+        # Repo links to the analyzed revision; commit links to that commit.
+        self.assertIn('href="https://github.com/o/r/tree/abc123def4567"', note)
+        self.assertIn('href="https://github.com/o/r/commit/abc123def4567"', note)
+        self.assertIn("abc123def456", note)
+
+    def test_note_omitted_for_private(self):
+        from dramaturgy.commands.render_html import render_html
+        html = render_html(self._mm({
+            "public": False, "repo_url": "https://github.com/o/r",
+            "commit": "abc"}), "ja")
+        self.assertNotIn('class="source-note"', html)
+
+    def test_note_omitted_when_no_source(self):
+        from dramaturgy.commands.render_html import render_html
+        mm = {"content_lang": "ja", "system": {"name": "S"}, "areas": [],
+              "concepts": [], "classifications": [], "components": [],
+              "actors": [], "flows": []}
+        self.assertNotIn('class="source-note"', render_html(mm, "ja"))
+
+
 class DeveloperModeTests(unittest.TestCase):
     """Developer-facing items (code refs / APIs / screens / validation) are
     emitted but marked dev-only, so the app shell can hide them for

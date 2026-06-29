@@ -33,6 +33,7 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "merge":       ("merge_maps", "merge per-area maps into meaning-map.json"),
     "validate":    ("validate_map", "mechanical consistency + language invariants"),
     "render":      ("render_html", "render meaning-map.json to a self-contained HTML"),
+    "export-parts": ("export_parts", "derive map-index.json + parts/ for partial reads"),
 }
 
 PRIMARY = ("setup", "serve")

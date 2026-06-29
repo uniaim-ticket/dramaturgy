@@ -190,6 +190,9 @@ class ApiTests(unittest.TestCase):
             self.assertIn("販売", exported)
             self.assertNotIn('class="rv-pin"', exported)
             self.assertIn('id="dev-toggle"', exported)
+            # render also refreshes the partial-read derivatives.
+            self.assertTrue((api.ws / "map-index.json").exists())
+            self.assertTrue((api.ws / "parts" / "areas" / "sales.json").exists())
 
     def test_validate_reports_missing_code_ref(self):
         # Tables/APIs are no longer machine-checkable (Claude discovers them

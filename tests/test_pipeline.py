@@ -604,6 +604,74 @@ class OverviewFlowTests(unittest.TestCase):
         self.assertIn('href="#area-admin-operation"', card)
 
 
+class ExportPartsTests(unittest.TestCase):
+    """The partial-read derivatives: a small index + self-contained per-area
+    and per-concept part files, regenerated from the canonical map."""
+
+    def _mm(self):
+        return {
+            "content_lang": "ja",
+            "system": {"name": "S", "purpose": "目的"},
+            "actors": [{"id": "u", "name": "利用者", "category": "person"}],
+            "areas": [
+                {"id": "sales", "name": "販売", "one_liner": "売る",
+                 "parent_area_id": None, "child_area_ids": [],
+                 "related_area_ids": [],
+                 "actors": [{"actor_id": "u", "actions": ["申込"]}],
+                 "concept_crud": [{"concept_id": "order", "ops": "CRU"}]}],
+            "concepts": [{"id": "order", "name": "注文",
+                          "physical_tables": ["orders"], "kind": "entity",
+                          "tags": ["transaction"],
+                          "crud_by_area": [{"area_id": "sales", "ops": "CRU"}]}],
+            "classifications": [{"id": "st", "name": "状態", "concept_id": "order",
+                                 "values": [{"code": "1", "label": "新規"}]}],
+            "components": [], "flows": []}
+
+    def test_index_and_parts_written(self):
+        from dramaturgy.commands.export_parts import export_parts
+        with tempfile.TemporaryDirectory() as d:
+            out = Path(d)
+            idx = export_parts(self._mm(), out)
+            # Index lists areas/concepts with a part path + byte hint.
+            self.assertEqual(idx["counts"]["areas"], 1)
+            self.assertEqual(idx["system"]["purpose"], "目的")
+            self.assertEqual(idx["areas"][0]["part"], "parts/areas/sales.json")
+            self.assertIn("bytes", idx["areas"][0])
+            self.assertTrue((out / "map-index.json").exists())
+            self.assertTrue((out / "parts" / "areas" / "sales.json").exists())
+            self.assertTrue((out / "parts" / "concepts" / "order.json").exists())
+            self.assertTrue((out / "parts" / "README.md").exists())
+
+    def test_area_part_is_self_contained(self):
+        from dramaturgy.commands.export_parts import export_parts
+        with tempfile.TemporaryDirectory() as d:
+            out = Path(d)
+            export_parts(self._mm(), out)
+            part = json.loads(
+                (out / "parts" / "areas" / "sales.json").read_text("utf-8"))
+            # Concept name + tables resolved inline; actor name resolved; the
+            # classification detailing the concept is included.
+            res = part["resolved"]
+            self.assertEqual(res["concepts"][0]["name"], "注文")
+            self.assertEqual(res["concepts"][0]["physical_tables"], ["orders"])
+            self.assertEqual(res["actors"][0]["name"], "利用者")
+            self.assertEqual(res["classifications"][0]["id"], "st")
+
+    def test_stale_parts_removed_on_regen(self):
+        from dramaturgy.commands.export_parts import export_parts
+        with tempfile.TemporaryDirectory() as d:
+            out = Path(d)
+            export_parts(self._mm(), out)
+            # Regenerate from a map without the 'order' concept: its stale part
+            # file must be gone.
+            mm2 = self._mm()
+            mm2["concepts"] = []
+            mm2["areas"][0]["concept_crud"] = []
+            export_parts(mm2, out)
+            self.assertFalse(
+                (out / "parts" / "concepts" / "order.json").exists())
+
+
 class SourceProvenanceTests(unittest.TestCase):
     """A provenance note (repo link + analyzed commit) is shown only for
     public sources, where public is decided by a LICENSE file at analysis."""

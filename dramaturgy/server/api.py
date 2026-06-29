@@ -17,6 +17,7 @@ from typing import Any, Callable
 from ..common.config import Config, load_config, save_config
 from ..common.paths import ensure_workspace, read_json, workspace_dir, write_json
 from ..commands.analyze_repo import analyze_repo as run_analyze_repo
+from ..commands.export_parts import export_parts
 from ..commands.merge_maps import merge as merge_maps
 from ..commands.render_html import render_html
 from ..commands.validate_map import Report, validate as run_validate
@@ -178,6 +179,8 @@ class Api:
         if not isinstance(body, (dict, list)):
             return 400, {"error": "body must be a JSON object or array"}
         write_json(self.ws / name, body)
+        if name == "meaning-map.json" and isinstance(body, dict):
+            self._refresh_derived(body)
         return 200, {"ok": True, "path": str(self.ws / name)}
 
     def patch_area(self, area_id: str, body: dict):
@@ -190,6 +193,7 @@ class Api:
             if area.get("id") == area_id:
                 areas[i] = {**area, **body, "id": area_id}
                 write_json(self.ws / "meaning-map.json", mm)
+                self._refresh_derived(mm)
                 return 200, areas[i]
         return 404, {"error": f"area '{area_id}' not found"}
 
@@ -214,6 +218,7 @@ class Api:
             if c.get("id") == concept_id:
                 concepts[i] = {**c, **body, "id": concept_id}
                 write_json(self.ws / "meaning-map.json", mm)
+                self._refresh_derived(mm)
                 return 200, concepts[i]
         return 404, {"error": f"concept '{concept_id}' not found"}
 
@@ -247,6 +252,7 @@ class Api:
         if meta:
             merged.setdefault("system", {})["source"] = meta
         write_json(self.ws / "meaning-map.json", merged)
+        self._refresh_derived(merged)
         return 200, {"areas": len(merged.get("areas", [])),
                      "report": merged.get("merge_report", {})}
 
@@ -266,11 +272,29 @@ class Api:
         mm = self._read_optional("meaning-map.json")
         if mm is None:
             return 404, {"error": "meaning-map.json not found"}
-        html = render_html(mm, self._config().ui_lang,
-                           tags.load_vocab(self.repo_root))
+        cfg = self._config()
+        html = render_html(mm, cfg.ui_lang, tags.load_vocab(self.repo_root))
         out = self.ws / "meaning-map.html"
         out.write_text(html, encoding="utf-8")
+        warning = self._refresh_derived(mm)
+        if warning:
+            return 200, {"ok": True, "path": str(out), "parts_warning": warning}
         return 200, {"ok": True, "path": str(out)}
+
+    def _refresh_derived(self, mm: dict | None = None) -> str | None:
+        """Regenerate the partial-read derivatives (map-index.json + parts/)
+        from the canonical map so a separate agent reading them never sees a
+        stale view. Best-effort: never raises into the caller."""
+        if mm is None:
+            mm = self._read_optional("meaning-map.json")
+        if mm is None:
+            return None
+        try:
+            export_parts(mm, self.ws, Catalog(self._config().ui_lang,
+                                              domain="cli"))
+            return None
+        except Exception as exc:  # derivation must never break a write path
+            return str(exc)
 
     def render_html_text(self) -> str | None:
         mm = self._read_optional("meaning-map.json")
@@ -653,6 +677,10 @@ class Api:
                         pass
                 elif job.kind == "review:proposal":
                     patch["proposal_ref"] = out_path
+            # A reframe edits meaning-map.json directly; re-render the HTML view
+            # and refresh the partial-read derivatives so both stay in sync.
+            if finding.get("kind") == "reframe":
+                self.render()
         else:
             status = "aborted" if err and "without a result" in err else "error"
             job.set_status(status, error=err)

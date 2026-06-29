@@ -316,6 +316,7 @@ subdivide       子領域案の提示
 merge           領域マップ統合
 validate        機械的整合性＋言語不変条件の検査
 render          HTML生成
+export-parts    部分参照用の map-index.json + parts/ を正本から派生（読み取り専用）
 ```
 
 ### 0. setup（`dra setup`）
@@ -512,6 +513,31 @@ HTMLに必要なビュー:
 * ラベル・ナビゲーション・見出しなどの固定文言(chrome)は `ui_lang` のメッセージカタログから差し込む。
 * 本文コンテンツ（領域名・説明・概念など）は meaning-map.json の `content_lang` のまま表示する。
 * HTMLには `<html lang="...">` に content_lang を反映し、chromeとコンテンツの言語が異なる場合もある旨を考慮する。
+
+### 6b. export-parts（`dra export-parts`）— 部分参照用の派生
+
+目的:
+
+正本 `meaning-map.json` は全体を1ファイルに持つため「全部読む」には最適だが、ある領域だけ見たい
+読者にも全文パースを強いる。そこで**正本から派生する読み取り専用ビュー**を出力し、
+別セッションのエージェント（dramaturgyとは無関係に、対象リポジトリで普通に作業している
+Claude Code 等）が**必要な分だけ**読めるようにする。
+
+* `map-index.json`（数十KB）: システムの目的、領域ツリー（id/name/one_liner/親子）、概念・登場人物の
+  一覧。各エントリに `part`（部分ファイルのパス）と `bytes`（サイズ目安）を付け、全体把握と
+  「どのpartを開くか」の判断を軽量に行えるようにする。
+* `parts/areas/<id>.json`: 領域単位の**自己完結**カード。触れる概念の名前・物理テーブル、登場人物名、
+  関連する区分を解決して同梱するので、その1ファイルだけで作業判断できる。
+* `parts/concepts/<id>.json`: 概念単位のカード（使用領域名とCRUDを解決）。
+* `parts/README.md`: ディレクトリの読み方を人間/エージェント向けに説明する。
+
+重要な原則:
+
+* 正本は依然 `meaning-map.json` 一本。`map-index.json` と `parts/` は**派生・読み取り専用**で、
+  merge / render のたびに正本から再生成するため陳腐化しない。手編集は正本に対してのみ行う。
+* 派生は `render`（一括初期化の末尾、reframe反映後の再描画、UI/HTTPの各書き戻し）で自動更新する。
+  生成途中の `area-maps/<id>.json` は初回生成の中間物であり、部分参照の正本としては使わない
+  （編集が反映されないため）。
 
 ### 7. validate（`dra validate`）
 

@@ -228,6 +228,25 @@ the web UI and slash commands call; they're exposed for scripting too.
 | `dra merge` | Merge per-area maps; detect dup ids / drift / orphans |
 | `dra validate` | Mechanical consistency + language invariants |
 | `dra render` | Render `meaning-map.json` to a self-contained HTML |
+| `dra export-parts` | Derive `map-index.json` + `parts/` for partial reads |
+
+## Reading the map partially (for agents)
+
+`meaning-map.json` is the single source of truth and is ideal for "read
+everything." For an agent that only needs part of the system (e.g. a separate
+Claude Code session changing one area), `render` (and every write-back) also
+emits read-only derivatives:
+
+- **`.dramaturgy/map-index.json`** — a small manifest: the system purpose, the
+  area tree, and the concept/actor lists, each with a `part` path and a `bytes`
+  size hint. Read this first to grasp the whole shape cheaply.
+- **`.dramaturgy/parts/areas/<id>.json`** and **`parts/concepts/<id>.json`** —
+  one **self-contained** card per area/concept (referenced names, tables, and
+  classifications resolved inline), so opening just that file is enough to act.
+- **`.dramaturgy/parts/README.md`** explains the layout in place.
+
+These are regenerated from the canonical map on every render, so they never
+drift; edit only `meaning-map.json`.
 
 ## Principles
 

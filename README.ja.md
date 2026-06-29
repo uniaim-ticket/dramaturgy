@@ -201,6 +201,23 @@ Claude Code セッションで実行します。
 | `dra merge` | 領域マップを統合し、重複ID・揺れ・孤立を検出 |
 | `dra validate` | 機械的整合性＋言語不変条件の検査 |
 | `dra render` | `meaning-map.json` を単一HTMLに描画 |
+| `dra export-parts` | 部分参照用の `map-index.json` + `parts/` を派生 |
+
+## 地図を部分的に読む（エージェント向け）
+
+`meaning-map.json` は唯一の正本で、「全部読む」には最適です。一方、システムの一部だけ必要な
+エージェント（例: 別セッションのClaude Codeが1領域を改修する）向けに、`render`（および各書き戻し）が
+**読み取り専用の派生**も出力します。
+
+- **`.dramaturgy/map-index.json`** — 軽量マニフェスト。システムの目的・領域ツリー・概念/登場人物の
+  一覧を、各エントリの `part`（部分ファイルのパス）と `bytes`（サイズ目安）付きで持ちます。まずこれを
+  読めば全体像を安価に把握できます。
+- **`.dramaturgy/parts/areas/<id>.json`** / **`parts/concepts/<id>.json`** — 領域/概念単位の
+  **自己完結**カード（参照先の名前・テーブル・区分を解決して同梱）。その1ファイルだけで作業判断できます。
+- **`.dramaturgy/parts/README.md`** に読み方を記載しています。
+
+これらは render のたびに正本から再生成されるため陳腐化しません。編集は `meaning-map.json` に対してのみ
+行ってください。
 
 ## 方針
 

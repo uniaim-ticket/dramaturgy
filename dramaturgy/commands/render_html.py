@@ -1112,8 +1112,9 @@ def _render_html_body(mm, ui_lang, vocab, cat, content_lang, system,
         ("validation", "nav.validation", True),
     ]
     nav = "".join(
-        f'<a href="#{anchor}"{" class=\"dev-only\"" if dev else ""}>{e(cat.t(key))}</a>'
-        for anchor, key, dev in nav_items)
+        f'<a href="#{anchor}"{cls}>{e(cat.t(key))}</a>'
+        for anchor, key, dev in nav_items
+        for cls in (' class="dev-only"' if dev else '',))
     # The standalone export has no app shell, so it carries its own developer
     # details toggle in the nav (the live view is driven by the shell button).
     if export:

@@ -1,4 +1,4 @@
-# 意味地図生成ツール 作成指示書 改訂版
+# 意味地図生成ツール 仕様書
 
 ## 前提
 
@@ -372,9 +372,8 @@ dra setup \
 * テーブル / エンティティ / カラム / 外部キー
 * API / ルート / コントローラ / モデル / マイグレーション / 役割
 
-> 旧版にあった `analyze-schema`（SQL解析）と `candidates`（候補材料生成）は廃止した。
-> テーブルは SQL とは限らず（ORM・マイグレーション・規約で定義され得る）、機械抽出は
-> 誤りを生むため。これらの発見は Claude がソースを読んで行う。
+テーブルは SQL とは限らず（ORM・マイグレーション・規約で定義され得る）、機械抽出は誤りを生む。
+これらの発見は Claude がソースを読んで行う。
 
 ### 2. tree-prompt（`dra tree-prompt`）
 
@@ -548,7 +547,7 @@ Claude Code 等）が**必要な分だけ**読めるようにする。
 検査内容（機械的に確実に検査できるもののみ）:
 
 * 参照先ファイル（code_refs）が存在するか
-* CRUD対象が concepts に存在するか（id 形のキーのみ）
+* 各領域の concept_crud が参照する concept_id が concepts に存在するか
 * parent_area_id / child_area_ids が一致しているか
 * related_area_ids が存在するか
 * 循環参照がないか
@@ -593,21 +592,18 @@ Claude Code 等）が**必要な分だけ**読めるようにする。
       "parent_area_id": null,
       "child_area_ids": [],
       "related_area_ids": [],
-      "primary_actors": [],
-      "primary_concepts": [],
       "source_hints": {
         "directories": [],
-        "tables": [],
-        "apis": [],
-        "screens": [],
         "keywords": []
       },
-      "split_reason": "",
       "confidence": "high|medium|low"
     }
   ]
 }
 ```
+
+`source_hints` は `pack` がファイルを集めるためのヒント（ディレクトリ名・キーワード）のみ。
+テーブル/API/画面は事前抽出しないので持たない（Claude がソースを読んで発見する）。
 
 ## meaning-map.json のスキーマ
 
@@ -616,19 +612,12 @@ Claude Code 等）が**必要な分だけ**読めるようにする。
   "content_lang": "ja",
   "system": {
     "name": "",
-    "summary": "",
     "purpose": "",
-    "generated_at": "",
     "source": {
       "public": false,
       "repo_url": "",
       "commit": "",
       "commit_short": ""
-    },
-    "source_summary": {
-      "files": 0,
-      "lines": 0,
-      "tables": 0
     }
   },
   "actors": [
@@ -661,7 +650,6 @@ Claude Code 等）が**必要な分だけ**読めるようにする。
           "actions": []
         }
       ],
-      "concepts": [],
       "concept_crud": [
         { "concept_id": "", "ops": "CRUD" }
       ],
@@ -743,8 +731,7 @@ Claude Code 等）が**必要な分だけ**読めるようにする。
 * `merge` が各領域の `concept_crud` を集約し、概念側に
   `crud_by_area: [{area_id, ops}]` と `related_areas` を生成する。CRUDビューは
   この同一データを1つの並び替え・絞り込み可能な表として表示する。
-* 旧 `crud_summary` / 領域側 `tables` フィールドは廃止（CRUDは概念単位、テーブルは
-  概念の `physical_tables` に集約）。
+* テーブルは概念の `physical_tables` に集約する（領域に直接テーブルを持たせない）。
 
 ### 概念データの任意タグ（システム固有）
 

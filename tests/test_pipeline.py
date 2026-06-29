@@ -130,7 +130,7 @@ class PipelineTests(unittest.TestCase):
             # Author a minimal area-tree + area map.
             (ws / "area-tree.json").write_text(json.dumps({
                 "content_lang": "ja",
-                "system": {"name": "Sample", "summary": "s"},
+                "system": {"name": "Sample"},
                 "areas": [{
                     "id": "sales", "name": "販売", "one_liner": "x",
                     "source_hints": {"keywords": ["ticket"]},
@@ -142,10 +142,7 @@ class PipelineTests(unittest.TestCase):
 
             area_map = {
                 "content_lang": "ja",
-                "system": {"name": "Sample", "summary": "s",
-                           "generated_at": "2026-06-26",
-                           "source_summary": {"files": 1, "lines": 3,
-                                              "tables": 2}},
+                "system": {"name": "Sample"},
                 "actors": [{"id": "user", "name": "利用者",
                             "description": "d",
                             "actions": [{"area_id": "sales",
@@ -155,16 +152,15 @@ class PipelineTests(unittest.TestCase):
                     "id": "sales", "name": "販売", "one_liner": "x",
                     "purpose": "p", "parent_area_id": None,
                     "child_area_ids": [], "related_area_ids": [],
-                    "concepts": ["ticket"], "crud_summary": {"ticket": "CR"},
-                    "tables": ["tickets"], "apis": ["/api/tickets/apply"],
+                    "concept_crud": [{"concept_id": "ticket", "ops": "CR"}],
+                    "apis": ["/api/tickets/apply"],
                     "screens": [], "code_refs": [], "risk_points": [],
                     "open_questions": [], "confidence": "high",
                 }],
                 "concepts": [{"id": "ticket", "name": "チケット",
                               "description": "d", "kind": "entity",
-                              "related_tables": ["tickets"],
-                              "related_areas": ["sales"], "states": [],
-                              "confidence": "high"}],
+                              "physical_tables": ["tickets"],
+                              "states": [], "confidence": "high"}],
                 "flows": [],
             }
             amap = ws / "area-maps" / "sales.json"
@@ -189,10 +185,9 @@ class PipelineTests(unittest.TestCase):
             dra(["analyze-repo", "--repo-root", d])
             mm = {
                 "content_lang": "ja",
-                "system": {"name": "S", "summary": "",
-                           "source_summary": {}},
+                "system": {"name": "S"},
                 "actors": [], "concepts": [], "flows": [],
-                "areas": [{"id": "a", "name": "A", "tables": ["anything"],
+                "areas": [{"id": "a", "name": "A",
                            "apis": [], "code_refs": ["no/such/file.rb"],
                            "related_area_ids": [], "child_area_ids": [],
                            "confidence": "high"}],
@@ -203,6 +198,23 @@ class PipelineTests(unittest.TestCase):
             # no longer checked — Claude discovers those from source.)
             self.assertEqual(1, dra(["validate", "--repo-root", d]))
 
+    def test_validate_detects_unknown_concept_crud(self):
+        from dramaturgy.commands.validate_map import validate, Report
+        from dramaturgy.common.i18n import Catalog
+        from dramaturgy.common.config import Config
+        # An area's concept_crud must reference an existing concept.
+        mm = {"content_lang": "ja", "system": {"name": "S"},
+              "actors": [], "flows": [],
+              "areas": [{"id": "a", "name": "A", "code_refs": [],
+                         "related_area_ids": [], "child_area_ids": [],
+                         "concept_crud": [{"concept_id": "ghost", "ops": "CR"}]}],
+              "concepts": [{"id": "real", "name": "実在"}]}
+        report = Report(Catalog("ja", domain="cli"))
+        validate(mm, {"files": []},
+                 Config(ui_lang="ja", content_lang="ja", repo_root="."),
+                 ".", report)
+        self.assertTrue(any("ghost" in str(e) for e in report.errors))
+
     def test_mixed_language_html(self):
         with tempfile.TemporaryDirectory() as d:
             root = Path(d)
@@ -211,8 +223,7 @@ class PipelineTests(unittest.TestCase):
             save_config(Config(ui_lang="en", content_lang="ja", repo_root=d), d)
             (ws / "meaning-map.json").write_text(json.dumps({
                 "content_lang": "ja",
-                "system": {"name": "S", "summary": "概要",
-                           "source_summary": {}},
+                "system": {"name": "S"},
                 "actors": [], "concepts": [], "flows": [], "areas": [],
             }, ensure_ascii=False), encoding="utf-8")
             self.assertEqual(0, dra(["render", "--repo-root", d]))

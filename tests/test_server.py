@@ -56,12 +56,12 @@ def _fake_spawn_for(ws: Path, area_id: str):
     target = ws / "area-maps" / f"{area_id}.json"
     card = {
         "content_lang": "ja",
-        "system": {"name": "S", "source_summary": {}},
+        "system": {"name": "S"},
         "actors": [], "concepts": [], "flows": [],
         "areas": [{
-            "id": area_id, "name": "販売", "one_liner": "x", "tables": [],
+            "id": area_id, "name": "販売", "one_liner": "x",
             "apis": [], "code_refs": [], "related_area_ids": [],
-            "child_area_ids": [], "confidence": "high", "crud_summary": {},
+            "child_area_ids": [], "confidence": "high", "concept_crud": [],
         }],
     }
     lines = [
@@ -155,12 +155,12 @@ class ApiTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             api = Api(d)
             mm = {"content_lang": "ja",
-                  "system": {"name": "S", "source_summary": {}},
+                  "system": {"name": "S"},
                   "actors": [], "concepts": [], "flows": [],
-                  "areas": [{"id": "sales", "name": "販売", "tables": [],
+                  "areas": [{"id": "sales", "name": "販売",
                              "apis": [], "code_refs": [], "related_area_ids": [],
                              "child_area_ids": [], "confidence": "high",
-                             "crud_summary": {}}]}
+                             "concept_crud": []}]}
             api.put_artifact("meaning-map.json", mm)
             status, area = api.patch_area("sales", {"one_liner": "申込から"})
             self.assertEqual(status, 200)
@@ -175,12 +175,12 @@ class ApiTests(unittest.TestCase):
             api = Api(d)
             api.analyze({})
             mm = {"content_lang": "ja",
-                  "system": {"name": "S", "summary": "", "source_summary": {}},
+                  "system": {"name": "S"},
                   "actors": [], "concepts": [], "flows": [],
-                  "areas": [{"id": "sales", "name": "販売", "tables": ["tickets"],
+                  "areas": [{"id": "sales", "name": "販売",
                              "apis": [], "code_refs": [], "related_area_ids": [],
                              "child_area_ids": [], "confidence": "high",
-                             "crud_summary": {}}]}
+                             "concept_crud": []}]}
             api.put_artifact("meaning-map.json", mm)
             self.assertTrue(api.validate()[1]["ok"])
             self.assertEqual(200, api.render()[0])
@@ -203,12 +203,12 @@ class ApiTests(unittest.TestCase):
             api = Api(d)
             api.analyze({})
             mm = {"content_lang": "ja",
-                  "system": {"name": "S", "summary": "", "source_summary": {}},
+                  "system": {"name": "S"},
                   "actors": [], "concepts": [], "flows": [],
-                  "areas": [{"id": "a", "name": "A", "tables": ["whatever"],
+                  "areas": [{"id": "a", "name": "A",
                              "apis": [], "code_refs": ["does/not/exist.rb"],
                              "related_area_ids": [], "child_area_ids": [],
-                             "confidence": "high", "crud_summary": {}}]}
+                             "confidence": "high", "concept_crud": []}]}
             api.put_artifact("meaning-map.json", mm)
             self.assertFalse(api.validate()[1]["ok"])
 
@@ -254,12 +254,12 @@ class ClaudeJobTests(unittest.TestCase):
                     path = m.group(1)
                     aid = Path(path).stem
                     card = {"content_lang": "ja",
-                            "system": {"name": "S", "source_summary": {}},
+                            "system": {"name": "S"},
                             "actors": [], "concepts": [], "flows": [],
                             "areas": [{"id": aid, "name": aid, "one_liner": "x",
-                                       "tables": [], "apis": [], "code_refs": [],
+                                       "apis": [], "code_refs": [],
                                        "related_area_ids": [], "child_area_ids": [],
-                                       "confidence": "high", "crud_summary": {}}]}
+                                       "confidence": "high", "concept_crud": []}]}
                     writes = [(Path(path), json.dumps(card, ensure_ascii=False))]
                 elif "意味地図のサマリ" in prompt:   # system purpose step
                     mm = json.loads((ws / "meaning-map.json").read_text("utf-8"))
@@ -320,7 +320,7 @@ class ClaudeJobTests(unittest.TestCase):
                     # first — the card prompt also mentions area-tree paths.
                     aid = Path(m.group(1)).stem
                     card = {"content_lang": "ja",
-                            "system": {"name": "S", "source_summary": {}},
+                            "system": {"name": "S"},
                             "actors": [], "concepts": [], "flows": [],
                             "areas": [{"id": aid, "name": aid, "one_liner": "x",
                                        "concept_crud": [], "related_area_ids": [],
@@ -512,12 +512,12 @@ class ClaudeJobTests(unittest.TestCase):
                                      "subtype": "error_during_execution",
                                      "result": "API Error"})], [])
                 card = {"content_lang": "ja",
-                        "system": {"name": "S", "source_summary": {}},
+                        "system": {"name": "S"},
                         "actors": [], "concepts": [], "flows": [],
                         "areas": [{"id": aid, "name": aid, "one_liner": "x",
-                                   "tables": [], "apis": [], "code_refs": [],
+                                   "apis": [], "code_refs": [],
                                    "related_area_ids": [], "child_area_ids": [],
-                                   "confidence": "high", "crud_summary": {}}]}
+                                   "confidence": "high", "concept_crud": []}]}
                 return _FakeProc(
                     [json.dumps({"type": "result", "is_error": False,
                                  "subtype": "success", "result": "ok"})],
@@ -608,7 +608,7 @@ class ReviewTests(unittest.TestCase):
                                           "subtype": "success", "result": "ok"})], [])
         api.spawn = _noop_spawn
         mm = {"content_lang": "ja",
-              "system": {"name": "S", "source_summary": {}},
+              "system": {"name": "S"},
               "actors": [{"id": "user", "name": "利用者", "actions": []}],
               "concepts": [{"id": "order", "name": "注文",
                             "physical_tables": ["orders"], "kind": "entity"}],
@@ -757,7 +757,7 @@ class ReviewTests(unittest.TestCase):
 class TagTests(unittest.TestCase):
     def _api_with_concept(self, d):
         api = Api(d)
-        mm = {"content_lang": "ja", "system": {"name": "S", "source_summary": {}},
+        mm = {"content_lang": "ja", "system": {"name": "S"},
               "actors": [], "flows": [], "areas": [],
               "concepts": [{"id": "order", "name": "注文", "kind": "entity",
                             "physical_tables": ["orders"]}]}

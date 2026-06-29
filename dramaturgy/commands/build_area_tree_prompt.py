@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """build_area_tree_prompt — generate the area-tree prompt for Claude.
 
-Feeds Claude the reliable file/directory inventory (not pre-extracted
-"candidates") and instructs it to read the actual source to discover the
-business areas, concepts, and entities. Writes ``.dramaturgy/prompts/area-tree.md``.
+Feeds Claude the reliable file/directory inventory and instructs it to read
+the actual source to discover the business areas, concepts, and entities.
+Writes ``.dramaturgy/prompts/area-tree.md``.
 
 The prompt is in ``content_lang`` and asks Claude to write the generated
 fields in that language and to stamp ``content_lang`` into the output JSON.

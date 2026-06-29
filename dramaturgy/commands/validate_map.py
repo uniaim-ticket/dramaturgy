@@ -117,15 +117,12 @@ def validate(mm: dict, source_index: dict, config, repo_root: str,
                 report.error("validate.parent_child_mismatch",
                              detail=f"{area['id']} -> missing child {child}")
 
-    # CRUD targets that look like concept ids must exist in concepts.
-    # (Plain business names are allowed; only id-shaped keys are checked.)
-    concept_names = {c.get("name") for c in mm.get("concepts", [])}
+    # Each area's concept_crud must reference a concept that exists.
     for area in areas.values():
-        for target in (area.get("crud_summary") or {}):
-            looks_like_id = target.startswith("concept") or "." in target
-            if looks_like_id and concepts and target not in concepts \
-                    and target not in concept_names:
-                report.error("validate.unknown_concept", name=target)
+        for entry in area.get("concept_crud", []) or []:
+            cid = entry.get("concept_id")
+            if cid and concepts and cid not in concepts:
+                report.error("validate.unknown_concept", name=cid)
 
     cycle = _detect_cycle(areas)
     if cycle:

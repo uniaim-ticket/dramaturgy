@@ -89,7 +89,6 @@ Output area-map JSON shape (for this area):
     "name": "", "one_liner": "", "purpose": "",
     "parent_area_id": null, "child_area_ids": [], "related_area_ids": [],
     "actors": [{"actor_id": "", "actions": [""]}],
-    "concepts": ["<concept_id>"],
     "concept_crud": [{"concept_id": "<concept_id>", "ops": "CRUD"}],
     "overview_flow": {
       "title": "<name of this area's overview flow>",

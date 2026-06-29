@@ -582,6 +582,15 @@ function init() {
   });
 
   refreshState().then(async () => {
+    // With no meaning map yet, the non-developer view has nothing to show and
+    // the only useful controls (Analyze all, etc.) are developer-only — so
+    // start in developer mode. Not persisted: once a map exists, a reload
+    // returns to the default (off) / persisted preference. Done before
+    // refreshView so the iframe loads with the right ?dev state.
+    if (STATE && !STATE.meaning_map && !DEV_MODE) {
+      DEV_MODE = true;
+      applyDevMode();
+    }
     refreshView();
     const { status, data } = await api("GET", "/api/review/settings");
     if (status === 200) {

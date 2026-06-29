@@ -22,9 +22,11 @@
 </header>
 
 <div id="init-instr-bar" class="dev-only" hidden>
-  <label class="tiny" data-i="init.instr_label">Additional instructions for Claude (saved per repository, reused on every initialization):</label>
+  <label class="tiny" data-i="init.instr_label">Additional instructions for Claude (saved per repository, reused on every analysis):</label>
   <textarea id="init-instr" rows="3" placeholder="例: マスタ・トランザクションの区分をタグ付けしてください"></textarea>
   <div class="row">
+    <label class="tiny" for="init-effort" data-i="init.effort_label">Effort</label>
+    <select id="init-effort"></select>
     <button id="save-init-instr" data-i="init.instr_save">Save instructions</button>
     <span id="init-instr-status" class="status"></span>
   </div>

@@ -100,6 +100,20 @@ class InitInstructionsTests(unittest.TestCase):
             # No block when empty.
             self.assertNotIn("追加指示", area_tree_prompt(d, "ja", "S", ""))
 
+    def test_effort_default_persist_and_validate(self):
+        with tempfile.TemporaryDirectory() as d:
+            api = Api(d)
+            # Defaults to xhigh until set.
+            self.assertEqual(api.get_init_instructions()[1]["effort"], "xhigh")
+            api.put_init_instructions({"instructions": "x", "effort": "high"})
+            # Persists across a fresh Api instance (same repo).
+            self.assertEqual(Api(d)._read_effort(), "high")
+            # Invalid values are rejected and leave the saved value intact.
+            code, _ = api.put_init_instructions(
+                {"instructions": "x", "effort": "bogus"})
+            self.assertEqual(code, 400)
+            self.assertEqual(api._read_effort(), "high")
+
 
 class ApiTests(unittest.TestCase):
     def test_analyze_and_writeback(self):
@@ -395,6 +409,13 @@ class ClaudeJobTests(unittest.TestCase):
         self.assertIn("acceptEdits", argv)
         self.assertIn("--resume", argv)
         self.assertIn("sess-1", argv)
+        # No effort flag unless requested.
+        self.assertNotIn("--effort", argv)
+
+    def test_build_argv_effort(self):
+        argv = claude_runner.build_argv("P", "/repo", effort="xhigh")
+        self.assertIn("--effort", argv)
+        self.assertEqual(argv[argv.index("--effort") + 1], "xhigh")
 
     def test_retry_on_transient_then_success(self):
         # First attempt hits an API error; the retry succeeds. The wrapper

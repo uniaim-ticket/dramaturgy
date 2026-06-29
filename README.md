@@ -138,10 +138,13 @@ developer mode is on:
    As the final **system purpose** step, Claude writes a concise overall
    purpose for the whole system (≤1000 chars) once the full map is in place.
 
-   The **Instructions** button opens a box for extra guidance to Claude during
-   generation (e.g. "tag concepts as master vs. transaction"). It is saved per
-   repository (`.dramaturgy/init-instructions.txt`, separate from the result)
-   and reused on every initialization — you don't retype it each run.
+   The **Analysis instructions** button opens a box for extra guidance to
+   Claude during generation (e.g. "tag concepts as master vs. transaction"). It
+   is saved per repository (`.dramaturgy/init-instructions.txt`, separate from
+   the result) and reused on every analysis — you don't retype it each run. The
+   same box sets **Claude's effort** (low/medium/high/xhigh/max, default
+   **xhigh**), saved to `.dramaturgy/init-effort.txt` and applied to both the
+   full analysis and each finding run.
 2. **Read the preview** on the left. It shows, in order:
    - **Source note**: for public sources only (a LICENSE file is present at the
      repo root), a top-of-page note linking to the analyzed repository and the

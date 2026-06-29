@@ -84,22 +84,46 @@ class Api:
     def _instructions_path(self) -> Path:
         return self.ws / "init-instructions.txt"
 
+    @property
+    def _effort_path(self) -> Path:
+        return self.ws / "init-effort.txt"
+
     def _read_instructions(self) -> str:
         try:
             return self._instructions_path.read_text(encoding="utf-8")
         except FileNotFoundError:
             return ""
 
+    def _read_effort(self) -> str:
+        """The reasoning effort to run Claude with (per repository). Defaults
+        to xhigh; falls back to the default for unknown/empty values."""
+        try:
+            val = self._effort_path.read_text(encoding="utf-8").strip()
+        except FileNotFoundError:
+            val = ""
+        return val if val in claude_runner.EFFORT_LEVELS \
+            else claude_runner.DEFAULT_EFFORT
+
     def get_init_instructions(self):
-        return 200, {"instructions": self._read_instructions()}
+        return 200, {"instructions": self._read_instructions(),
+                     "effort": self._read_effort(),
+                     "effort_levels": list(claude_runner.EFFORT_LEVELS)}
 
     def put_init_instructions(self, body: dict):
-        text = (body or {}).get("instructions", "")
+        body = body or {}
+        text = body.get("instructions", "")
         if not isinstance(text, str):
             return 400, {"error": "instructions must be a string"}
         self._instructions_path.parent.mkdir(parents=True, exist_ok=True)
         self._instructions_path.write_text(text, encoding="utf-8")
-        return 200, {"instructions": text}
+        # Effort is optional in the body; persist only when provided.
+        if "effort" in body:
+            effort = body.get("effort")
+            if effort not in claude_runner.EFFORT_LEVELS:
+                return 400, {"error": f"effort must be one of "
+                                      f"{claude_runner.EFFORT_LEVELS}"}
+            self._effort_path.write_text(effort, encoding="utf-8")
+        return 200, {"instructions": text, "effort": self._read_effort()}
 
     # ---- config & state ------------------------------------------------
     def get_config(self):
@@ -317,10 +341,16 @@ class Api:
         buttons remain usable afterwards for adjustments.
         """
         body = body or {}
-        # An "instructions" field in the request both persists (for reuse) and
-        # is applied to this run; otherwise the saved instructions are used.
-        if "instructions" in body:
-            self.put_init_instructions({"instructions": body["instructions"]})
+        # "instructions"/"effort" in the request both persist (for reuse) and
+        # apply to this run; otherwise the saved values are used.
+        if "instructions" in body or "effort" in body:
+            patch = {"instructions": body.get("instructions",
+                                              self._read_instructions())}
+            if "effort" in body:
+                patch["effort"] = body["effort"]
+            code, res = self.put_init_instructions(patch)
+            if code != 200:
+                return code, res
         ok, info = claude_runner.preflight(self.claude_bin)
         if not ok and not body.get("force"):
             return 503, {"error": f"Claude Code CLI not available ({info}); "
@@ -335,6 +365,7 @@ class Api:
         assert isinstance(job, Job)
         cfg = self._config()
         extra = self._read_instructions()
+        effort = self._read_effort()
         job.set_status("running")
         try:
             # 1. analyze (mechanical)
@@ -352,7 +383,7 @@ class Api:
                 extra_instructions=extra)
             ok, err = claude_runner.stream_claude_with_retry(
                 job, prompt, self.repo_root,
-                claude_bin=self.claude_bin, spawn=self.spawn)
+                claude_bin=self.claude_bin, spawn=self.spawn, effort=effort)
             if not ok:
                 # The tree is a hard prerequisite — without it there is
                 # nothing to card. Stop, but leave the job re-runnable.
@@ -370,7 +401,7 @@ class Api:
                 self.repo_root, cfg.content_lang, extra_instructions=extra)
             ok, err = claude_runner.stream_claude_with_retry(
                 job, sub_prompt, self.repo_root,
-                claude_bin=self.claude_bin, spawn=self.spawn,
+                claude_bin=self.claude_bin, spawn=self.spawn, effort=effort,
                 resume_session=job.session_id)
             if ok:
                 tree = self._read_optional("area-tree.json") or tree
@@ -403,7 +434,7 @@ class Api:
                     continue
                 ok, err = claude_runner.stream_claude_with_retry(
                     job, card_prompt, self.repo_root,
-                    claude_bin=self.claude_bin, spawn=self.spawn,
+                    claude_bin=self.claude_bin, spawn=self.spawn, effort=effort,
                     resume_session=job.session_id)
                 if not ok:
                     failed.append(area_id)
@@ -444,7 +475,7 @@ class Api:
                 self.repo_root, cfg.content_lang, extra_instructions=extra)
             ok, err = claude_runner.stream_claude_with_retry(
                 job, purpose_prompt, self.repo_root,
-                claude_bin=self.claude_bin, spawn=self.spawn,
+                claude_bin=self.claude_bin, spawn=self.spawn, effort=effort,
                 resume_session=job.session_id)
             if ok:
                 job.append_progress("      purpose written")
@@ -608,7 +639,7 @@ class Api:
         ok, err = claude_runner.stream_claude_with_retry(
             job, job.prompt, self.repo_root,
             claude_bin=self.claude_bin, spawn=self.spawn,
-            resume_session=resume)
+            effort=self._read_effort(), resume_session=resume)
         patch = {"session_id": job.session_id}
         if ok:
             job.set_status("done")

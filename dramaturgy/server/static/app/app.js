@@ -10,6 +10,7 @@ const I18N = {
     "init.instr_toggle": "解析指示設定",
     "init.instr_label": "Claudeへの追加指示（リポジトリごとに保存し、毎回の全体解析で再利用されます）:",
     "init.instr_save": "指示を保存",
+    "init.effort_label": "Claudeの思考量",
     "init.running": "全体解析を実行中…", "init.done": "全体解析が完了しました",
     "job.running": "実行中…", "job.done": "完了", "job.error": "エラー", "job.idle": "応答待ち",
     "viewer.title": "意味地図プレビュー", "viewer.refresh": "資料更新",
@@ -41,6 +42,7 @@ const I18N = {
     "init.instr_toggle": "Analysis instructions",
     "init.instr_label": "Additional instructions for Claude (saved per repository, reused on every analysis):",
     "init.instr_save": "Save instructions",
+    "init.effort_label": "Claude effort",
     "init.running": "Analyzing…", "init.done": "Analysis complete",
     "job.running": "running…", "job.done": "done", "job.error": "error", "job.idle": "awaiting response",
     "viewer.title": "Meaning map preview", "viewer.refresh": "Refresh map",
@@ -131,15 +133,24 @@ async function refreshState() {
   return data;
 }
 
-// ---- init instructions (repo-specific, reused across runs) -------------
+// ---- init instructions + effort (repo-specific, reused across runs) ----
 async function loadInitInstructions() {
   const { status, data } = await api("GET", "/api/init-instructions");
-  if (status === 200) document.getElementById("init-instr").value = data.instructions || "";
+  if (status !== 200) return;
+  document.getElementById("init-instr").value = data.instructions || "";
+  const sel = document.getElementById("init-effort");
+  if (sel && !sel.options.length) {
+    (data.effort_levels || ["low", "medium", "high", "xhigh", "max"])
+      .forEach((lv) => sel.add(new Option(lv, lv)));
+  }
+  if (sel && data.effort) sel.value = data.effort;
 }
 
 async function saveInitInstructions() {
   const text = document.getElementById("init-instr").value;
-  const { status } = await api("PUT", "/api/init-instructions", { instructions: text });
+  const effort = document.getElementById("init-effort").value;
+  const { status } = await api("PUT", "/api/init-instructions",
+                               { instructions: text, effort });
   const el = document.getElementById("init-instr-status");
   el.textContent = status === 200 ? t("saved") : t("save_failed");
   el.className = status === 200 ? "status" : "status err";
@@ -155,10 +166,12 @@ function toggleInitInstructions() {
 async function runInit() {
   const btn = document.getElementById("run-init");
   btn.disabled = true;
-  // Send the current textarea so an edit takes effect even if not yet saved;
-  // the server also persists it for reuse.
+  // Send the current textarea + effort so an edit takes effect even if not yet
+  // saved; the server also persists them for reuse.
   const instructions = document.getElementById("init-instr").value;
-  const { status, data } = await api("POST", "/api/jobs/init", { instructions });
+  const effort = document.getElementById("init-effort").value;
+  const { status, data } = await api("POST", "/api/jobs/init",
+                                     { instructions, effort });
   if (status !== 202) {
     showJob("init-job", { status: "error", error: data.error });
     btn.disabled = false;

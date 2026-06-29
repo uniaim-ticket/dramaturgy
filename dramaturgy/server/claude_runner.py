@@ -57,6 +57,11 @@ def preflight(claude_bin: str = "claude") -> tuple[bool, str]:
     return True, out.stdout.strip()
 
 
+# Claude Code reasoning effort levels (claude --effort <level>).
+EFFORT_LEVELS = ("low", "medium", "high", "xhigh", "max")
+DEFAULT_EFFORT = "xhigh"
+
+
 def build_argv(
     prompt: str,
     repo_root: str,
@@ -64,6 +69,7 @@ def build_argv(
     claude_bin: str = "claude",
     permission_mode: str = "acceptEdits",
     resume_session: str | None = None,
+    effort: str | None = None,
     extra_args: Sequence[str] = (),
 ) -> list[str]:
     argv = [
@@ -73,6 +79,8 @@ def build_argv(
         "--permission-mode", permission_mode,
         "--add-dir", repo_root,
     ]
+    if effort:
+        argv += ["--effort", effort]
     if resume_session:
         argv += ["--resume", resume_session]
     argv += list(extra_args)
@@ -109,6 +117,7 @@ def stream_claude(
     claude_bin: str = "claude",
     permission_mode: str = "acceptEdits",
     resume_session: str | None = None,
+    effort: str | None = None,
     extra_args: Sequence[str] = (),
     spawn: SpawnFn = default_spawn,
 ) -> tuple[bool, str | None]:
@@ -121,9 +130,11 @@ def stream_claude(
     argv = build_argv(
         prompt, repo_root,
         claude_bin=claude_bin, permission_mode=permission_mode,
-        resume_session=resume_session, extra_args=extra_args,
+        resume_session=resume_session, effort=effort, extra_args=extra_args,
     )
-    job.append_progress(f"$ {claude_bin} -p … --permission-mode {permission_mode}")
+    eff = f" --effort {effort}" if effort else ""
+    job.append_progress(
+        f"$ {claude_bin} -p … --permission-mode {permission_mode}{eff}")
 
     try:
         proc = spawn(argv)

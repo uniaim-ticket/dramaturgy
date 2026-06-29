@@ -89,7 +89,7 @@ details.box.child[open] { border-color: #9db4cc; }
   padding: 4px 8px; background: #eef3f8; border-radius: 4px; display: inline-block; }
 .parent-of a { margin-left: 2px; }
 
-.kv { display: grid; grid-template-columns: 160px 1fr; gap: 4px 12px;
+.kv { display: grid; grid-template-columns: 160px 1fr; gap: 18px 12px;
   font-size: 14px; margin-top: 10px; }
 .kv dt { color: #5a6573; font-weight: 600; }
 .kv dd { margin: 0; }
